@@ -1,0 +1,24 @@
+{
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "includeCoAuthoredBy": false,
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Bash|Edit|Write|Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/opt/ai-sandbox/hooks/block-credentials.sh"
+          },
+          {
+            "type": "command",
+            "command": "/opt/ai-sandbox/hooks/block-sensitive-paths.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

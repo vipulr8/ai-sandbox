@@ -1,0 +1,43 @@
+services:
+  claude:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NODE_MAJOR: 22
+        GO_VERSION: "1.24.2"
+        USER_UID: ${USER_UID:-1000}
+        USER_GID: ${USER_GID:-1000}
+        CLAUDE_VERSION: ${CLAUDE_VERSION:-latest}
+    image: ai-sandbox:${CLAUDE_VERSION_TAG:-latest}
+    container_name: ai-sandbox
+    hostname: ai-sandbox
+
+    stdin_open: true
+    tty: true
+
+    volumes:
+      # Mount your project directory
+      - ${PROJECT_DIR:-.}:/home/coder/project
+
+      # Optional: Docker socket (Colima or standard)
+      # Uncomment to enable container-in-container:
+      # - ${DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock
+
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-}
+      - DISABLE_AUTOUPDATER=1
+      - TERM=${TERM:-xterm-256color}
+
+    working_dir: /home/coder/project
+
+  # Launch Claude Code directly: docker compose --profile interactive run claude-interactive
+  claude-interactive:
+    extends:
+      service: claude
+    container_name: ai-sandbox-interactive
+    command: ["claude"]
+    profiles:
+      - interactive
+

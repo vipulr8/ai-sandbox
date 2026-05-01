@@ -1,0 +1,15 @@
+#!/bin/bash
+# Global pre-commit hook: run gitleaks + strip Claude attribution
+
+# ── 1. Gitleaks: scan staged changes for secrets ─────────────────
+echo "=== gitleaks: scanning staged changes ==="
+
+if ! gitleaks protect --staged --no-banner; then
+    echo ""
+    echo "COMMIT BLOCKED: gitleaks found secrets in staged files."
+    echo "Fix the issues above before committing."
+    exit 1
+fi
+
+echo "=== gitleaks: clean ==="
+exit 0

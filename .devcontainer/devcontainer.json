@@ -1,0 +1,26 @@
+{
+  "name": "ai-sandbox",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "claude",
+  "workspaceFolder": "/home/coder/project",
+  "remoteUser": "coder",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      },
+      "extensions": [
+        "ms-python.python",
+        "golang.go",
+        "rust-lang.rust-analyzer",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "eamodio.gitlens",
+        "timonwong.shellcheck",
+        "tamasfe.even-better-toml",
+        "redhat.vscode-yaml",
+        "ms-azuretools.vscode-docker"
+      ]
+    }
+  }
+}

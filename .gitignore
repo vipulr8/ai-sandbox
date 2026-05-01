@@ -1,0 +1,22 @@
+# Credentials and auth
+.env
+.env.*
+*.key
+*.pem
+credentials.json
+.credentials.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-build.log
+
+# IDE
+.vscode/
+!.devcontainer/
+
+# Build artifacts
+*.tar
+*.tar.gz
