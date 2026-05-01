@@ -50,5 +50,32 @@ echo "  AI Push:  BLOCKED (AI commits are local only)"
 echo "================="
 echo ""
 
-# ── 5. Run command ────────────────────────────────────────────────
+# ── 5. VS Code Server settings ────────────────────────────────────
+# Disable settings sync entirely so host settings don't leak in.
+# Write settings after a delay so they apply after VS Code initializes.
+mkdir -p "$HOME/.vscode-server/data/Machine"
+cat > "$HOME/.vscode-server/data/Machine/settings.json" <<'VSSETTINGS'
+{
+    "settingsSync.ignoredSettings": ["*"],
+    "settings.experimental.enableRemoteSettingsSync": false,
+    "terminal.integrated.defaultProfile.linux": "zsh",
+    "terminal.integrated.profiles.linux": {
+        "zsh": { "path": "/usr/bin/zsh" },
+        "bash": null
+    },
+    "workbench.colorTheme": "Monokai",
+    "telemetry.telemetryLevel": "off",
+    "extensions.autoUpdate": false,
+    "extensions.autoCheckUpdates": false,
+    "remote.extensionKind": {
+        "anthropic.claude-code": ["workspace"],
+        "GitHub.copilot": ["ui"],
+        "GitHub.copilot-chat": ["ui"]
+    }
+}
+VSSETTINGS
+
+export SHELL=/usr/bin/zsh
+
+# ── 6. Run command ────────────────────────────────────────────────
 exec "$@"

@@ -141,6 +141,7 @@ RUN mkdir -p /home/${USER_NAME}/project \
 
 # Set zsh as default shell
 RUN sudo chsh -s "$(which zsh)" "${USER_NAME}"
+ENV SHELL=/usr/bin/zsh
 
 COPY --chown=${USER_NAME}:${USER_NAME} entrypoint.sh /home/${USER_NAME}/entrypoint.sh
 RUN chmod +x /home/${USER_NAME}/entrypoint.sh

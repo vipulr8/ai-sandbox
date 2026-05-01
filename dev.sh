@@ -200,23 +200,6 @@ docker run -d \
     "${IMAGE}" \
     sleep infinity >/dev/null
 
-# ── Block unwanted extensions from syncing into container ─────────
-docker exec "${CONTAINER_NAME}" bash -c "
-    mkdir -p /home/coder/.vscode-server/data/Machine
-    cat > /home/coder/.vscode-server/data/Machine/settings.json <<'SETTINGS'
-{
-    \"terminal.integrated.defaultProfile.linux\": \"zsh\",
-    \"workbench.colorTheme\": \"Monokai\",
-    \"telemetry.telemetryLevel\": \"off\",
-    \"remote.extensionKind\": {
-        \"anthropic.claude-code\": [\"ui\"],
-        \"GitHub.copilot\": [\"ui\"],
-        \"GitHub.copilot-chat\": [\"ui\"]
-    }
-}
-SETTINGS
-" >/dev/null 2>&1
-
 # ── Open VS Code attached to container ────────────────────────────
 CONTAINER_HEX=$(printf '%s' "${CONTAINER_NAME}" | xxd -p | tr -d '\n')
 VSCODE_URI="vscode-remote://attached-container+${CONTAINER_HEX}/home/coder/project"
@@ -225,6 +208,30 @@ echo "Opening VS Code..."
 code --folder-uri "${VSCODE_URI}" 2>/dev/null || {
     echo "Warning: 'code' CLI not found. Attach manually in VS Code."
 }
+
+# ── Pin Claude Code extension version inside container ────────────
+if [ "$CLAUDE_VERSION" != "latest" ]; then
+    echo "Pinning Claude Code extension to v${CLAUDE_VERSION}..."
+    # Write a script inside the container that pins the extension.
+    # It runs in the background, retrying to handle VS Code reloads.
+    docker exec "${CONTAINER_NAME}" bash -c "cat > /tmp/pin-extension.sh <<'SCRIPT'
+#!/bin/bash
+for attempt in 1 2 3 4 5; do
+    CLI=\$(ls ~/.vscode-server/bin/*/bin/code-server 2>/dev/null | head -1)
+    [ -z \"\$CLI\" ] && sleep 10 && continue
+    CURRENT=\$(\$CLI --list-extensions --show-versions 2>/dev/null | grep anthropic.claude-code | cut -d@ -f2)
+    if [ \"\$CURRENT\" != \"${CLAUDE_VERSION}\" ]; then
+        \$CLI --uninstall-extension anthropic.claude-code 2>/dev/null
+        \$CLI --install-extension anthropic.claude-code@${CLAUDE_VERSION} --force 2>/dev/null
+    fi
+    sleep 15
+done
+SCRIPT
+chmod +x /tmp/pin-extension.sh
+nohup /tmp/pin-extension.sh >/dev/null 2>&1 &"
+    echo "Extension will be pinned to v${CLAUDE_VERSION} (runs in background)."
+    echo "If version changes after reload, wait ~15s and reload again."
+fi
 
 # ── Done ──────────────────────────────────────────────────────────
 echo ""
