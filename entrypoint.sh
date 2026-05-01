@@ -28,6 +28,17 @@ elif [ -f /opt/ai-sandbox/settings.json ]; then
     cp /opt/ai-sandbox/settings.json "$HOME/.claude/settings.json"
 fi
 
+# ── 1b. Restore .claude.json if backup exists ─────────────────────
+# Claude Code expects ~/.claude.json at the home root. On container
+# restart it's lost, but backups persist in the mounted --claude-dir.
+# Pick the largest backup (small ones are empty/reset configs).
+if [ ! -f "$HOME/.claude.json" ]; then
+    BACKUP=$(ls -S "$HOME/.claude/backups/.claude.json.backup."* 2>/dev/null | head -1)
+    if [ -n "$BACKUP" ] && [ "$(stat -c%s "$BACKUP")" -gt 100 ]; then
+        cp "$BACKUP" "$HOME/.claude.json"
+    fi
+fi
+
 # ── 2. Docker socket permissions ──────────────────────────────────
 if [ -S /var/run/docker.sock ]; then
     DOCKER_GID=$(stat -c '%g' /var/run/docker.sock)
