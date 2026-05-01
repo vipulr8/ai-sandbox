@@ -35,7 +35,7 @@ list_instances() {
 # ── Parse arguments ──────────────────────────────────────────────
 PROJECT_PATH=""
 CLAUDE_VERSION="latest"
-SETTINGS_FILE=""
+CLAUDE_DIR=""
 
 show_help() {
     cat <<EOF
@@ -45,7 +45,7 @@ Usage:
   ./dev.sh <project-path> [options]
 
 Options:
-  --settings <file>           Pass a settings.json with API key
+  --claude-dir <path>         Mount a host directory as Claude config
   --claude-version <version>  Claude Code version (default: latest)
   --stop <project-path>       Stop the container for a specific project
   --stop-all                  Stop all ai-sandbox containers
@@ -53,7 +53,8 @@ Options:
   --help                      Show this help
 
 Examples:
-  ./dev.sh ~/myproject --settings ~/api-settings.json
+  ./dev.sh ~/myproject --claude-dir ~/.ai-sandbox-api --claude-version 2.1.98
+  ./dev.sh ~/myproject --claude-dir ~/.ai-sandbox/auth
   ./dev.sh ~/myproject
   ./dev.sh --stop ~/myproject
   ./dev.sh --stop-all
@@ -63,9 +64,9 @@ EOF
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --settings)
-            SETTINGS_FILE="${2:-}"
-            if [ -z "$SETTINGS_FILE" ]; then echo "Error: --settings requires a file path"; exit 1; fi
+        --claude-dir)
+            CLAUDE_DIR="${2:-}"
+            if [ -z "$CLAUDE_DIR" ]; then echo "Error: --claude-dir requires a path"; exit 1; fi
             shift 2
             ;;
         --claude-version)
@@ -174,21 +175,12 @@ if [ "${DOCKER_SOCKET:-0}" = "1" ]; then
     fi
 fi
 
-# ── Settings file mount ───────────────────────────────────────────
-SETTINGS_ARGS=()
-AUTH_ARGS=()
-if [ -n "$SETTINGS_FILE" ]; then
-    if [ ! -f "$SETTINGS_FILE" ]; then
-        echo "Error: Settings file not found: $SETTINGS_FILE"
-        exit 1
-    fi
-    SETTINGS_FILE="$(cd "$(dirname "$SETTINGS_FILE")" && pwd)/$(basename "$SETTINGS_FILE")"
-    mkdir -p "$HOME/.ai-sandbox-api"
-    AUTH_ARGS=(-v "$HOME/.ai-sandbox-api:/home/coder/.claude")
-    SETTINGS_ARGS=(-v "${SETTINGS_FILE}:/tmp/user-settings.json:ro")
-else
-    mkdir -p "$HOME/.ai-sandbox/auth"
-    AUTH_ARGS=(-v "$HOME/.ai-sandbox/auth:/home/coder/.claude")
+# ── Claude config directory mount ─────────────────────────────────
+CLAUDE_DIR_ARGS=()
+if [ -n "$CLAUDE_DIR" ]; then
+    CLAUDE_DIR="$(cd "$CLAUDE_DIR" 2>/dev/null && pwd || echo "$CLAUDE_DIR")"
+    mkdir -p "$CLAUDE_DIR"
+    CLAUDE_DIR_ARGS=(-v "$CLAUDE_DIR:/home/coder/.claude")
 fi
 
 # ── Start container in background ─────────────────────────────────
@@ -201,8 +193,7 @@ docker run -d \
     -e "DISABLE_AUTOUPDATER=1" \
     -e "TERM=${TERM:-xterm-256color}" \
     "${DOCKER_SOCK_ARGS[@]+"${DOCKER_SOCK_ARGS[@]}"}" \
-    "${SETTINGS_ARGS[@]+"${SETTINGS_ARGS[@]}"}" \
-    "${AUTH_ARGS[@]+"${AUTH_ARGS[@]}"}" \
+    "${CLAUDE_DIR_ARGS[@]+"${CLAUDE_DIR_ARGS[@]}"}" \
     -w /home/coder/project \
     "${IMAGE}" \
     sleep infinity >/dev/null
@@ -230,7 +221,6 @@ for attempt in 1 2 3 4 5; do
     CLI=\\\$(ls ~/.vscode-server/bin/*/bin/code-server 2>/dev/null | head -1)
     [ -z \"\\\$CLI\" ] && sleep 10 && continue
 
-    # Install all workspace extensions
     \\\$CLI --install-extension ms-python.python --force 2>/dev/null
     \\\$CLI --install-extension ms-python.debugpy --force 2>/dev/null
     \\\$CLI --install-extension charliermarsh.ruff --force 2>/dev/null

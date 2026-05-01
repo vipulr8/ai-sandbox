@@ -6,11 +6,24 @@ set -e
 # If user provided a settings.json via --settings, merge it in
 # so the API key is picked up but hooks are never overridden.
 mkdir -p "$HOME/.claude"
-if [ -f /tmp/user-settings.json ] && [ -f /opt/ai-sandbox/settings.json ]; then
-    # Merge: user settings as base, overlay with container hooks
-    jq -s '.[0] * .[1]' /tmp/user-settings.json /opt/ai-sandbox/settings.json \
-        > "$HOME/.claude/settings.json"
-    echo "* Settings loaded (API key from file + container hooks)"
+# Check for user settings: either mounted via --settings (old) or in the claude dir
+USER_SETTINGS=""
+if [ -f /tmp/user-settings.json ] && [ -s /tmp/user-settings.json ]; then
+    USER_SETTINGS="/tmp/user-settings.json"
+elif [ -f "$HOME/.claude/settings.json" ] && [ -s "$HOME/.claude/settings.json" ]; then
+    # Settings exist in mounted claude dir — save before overwriting
+    cp "$HOME/.claude/settings.json" /tmp/mounted-settings.json 2>/dev/null
+    USER_SETTINGS="/tmp/mounted-settings.json"
+fi
+
+if [ -n "$USER_SETTINGS" ] && [ -f /opt/ai-sandbox/settings.json ]; then
+    if jq -s '.[0] * .[1]' "$USER_SETTINGS" /opt/ai-sandbox/settings.json \
+        > "$HOME/.claude/settings.json" 2>/dev/null; then
+        echo "* Settings loaded (user config + container hooks)"
+    else
+        echo "! Warning: Failed to merge settings, using container defaults"
+        cp /opt/ai-sandbox/settings.json "$HOME/.claude/settings.json"
+    fi
 elif [ -f /opt/ai-sandbox/settings.json ]; then
     cp /opt/ai-sandbox/settings.json "$HOME/.claude/settings.json"
 fi

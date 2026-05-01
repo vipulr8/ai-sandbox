@@ -16,30 +16,29 @@ PROJECT_PATH=""
 LAUNCH_CLAUDE=false
 BUILD_ONLY=false
 CLAUDE_VERSION="latest"
-SETTINGS_FILE=""
+CLAUDE_DIR=""
 
 show_help() {
     cat <<EOF
 ai-sandbox -- Claude Code Dev Sandbox
 
 Usage:
-  ./run.sh [project-path]                         Bash shell in sandbox
-  ./run.sh [project-path] --claude                Launch Claude Code directly
-  ./run.sh [project-path] --claude-version 1.0.5  Use specific Claude Code version
-  ./run.sh [project-path] --settings path/to/settings.json  Use API key from settings file
-  ./run.sh --build                                Build image (latest)
-  ./run.sh --build --claude-version 1.0.5         Build with specific version
-  ./run.sh --help                                 Show this help
+  ./run.sh [project-path] [options]
 
-Authentication:
-  --settings <file>       Pass a settings.json with API key (third-party provider)
-  (no flag)               Authenticate interactively inside the container
+Options:
+  --claude                    Launch Claude Code CLI directly instead of zsh
+  --claude-dir <path>         Mount a host directory as Claude config (~/.claude inside container)
+  --claude-version <version>  Use a specific Claude Code version (default: latest)
+  --build                     Build or rebuild the Docker image
+  --help                      Show this help
 
 Environment variables:
-  DOCKER_SOCKET           Set to 1 to mount Docker socket into container
+  DOCKER_SOCKET               Set to 1 to mount Docker socket into container
 
 Examples:
-  ./run.sh ~/myproject --claude --settings ~/api-settings.json
+  ./run.sh ~/myproject --claude --claude-dir ~/.ai-sandbox-api
+  ./run.sh ~/myproject --claude --claude-dir ~/.ai-sandbox/auth
+  ./run.sh ~/myproject --claude --claude-dir ~/.ai-sandbox-api --claude-version 2.1.98
   ./run.sh ~/myproject --claude
   ./run.sh ~/myproject
 EOF
@@ -51,14 +50,14 @@ while [[ $# -gt 0 ]]; do
             LAUNCH_CLAUDE=true
             shift
             ;;
+        --claude-dir)
+            CLAUDE_DIR="${2:-}"
+            if [ -z "$CLAUDE_DIR" ]; then echo "Error: --claude-dir requires a path"; exit 1; fi
+            shift 2
+            ;;
         --claude-version)
             CLAUDE_VERSION="${2:-}"
             if [ -z "$CLAUDE_VERSION" ]; then echo "Error: --claude-version requires a version"; exit 1; fi
-            shift 2
-            ;;
-        --settings)
-            SETTINGS_FILE="${2:-}"
-            if [ -z "$SETTINGS_FILE" ]; then echo "Error: --settings requires a file path"; exit 1; fi
             shift 2
             ;;
         --build)
@@ -151,19 +150,11 @@ DOCKER_ARGS=(
     -w /home/coder/project
 )
 
-# Mount persistent directory + settings file if provided
-if [ -n "$SETTINGS_FILE" ]; then
-    if [ ! -f "$SETTINGS_FILE" ]; then
-        echo "Error: Settings file not found: $SETTINGS_FILE"
-        exit 1
-    fi
-    SETTINGS_FILE="$(cd "$(dirname "$SETTINGS_FILE")" && pwd)/$(basename "$SETTINGS_FILE")"
-    mkdir -p "$HOME/.ai-sandbox-api"
-    DOCKER_ARGS+=(-v "$HOME/.ai-sandbox-api:/home/coder/.claude")
-    DOCKER_ARGS+=(-v "${SETTINGS_FILE}:/tmp/user-settings.json:ro")
-else
-    mkdir -p "$HOME/.ai-sandbox/auth"
-    DOCKER_ARGS+=(-v "$HOME/.ai-sandbox/auth:/home/coder/.claude")
+# Mount Claude config directory if provided
+if [ -n "$CLAUDE_DIR" ]; then
+    CLAUDE_DIR="$(cd "$CLAUDE_DIR" 2>/dev/null && pwd || echo "$CLAUDE_DIR")"
+    mkdir -p "$CLAUDE_DIR"
+    DOCKER_ARGS+=(-v "$CLAUDE_DIR:/home/coder/.claude")
 fi
 
 # Optional Docker socket mount

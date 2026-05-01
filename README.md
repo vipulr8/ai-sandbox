@@ -28,7 +28,6 @@ Base image: Ubuntu 24.04 LTS. Runs as non-root user `coder` with passwordless su
 | **Credential file access blocked** | `.env`, `.pem`, `.key`, `credentials.json`, etc. |
 | **System path writes blocked** | `/etc`, `/usr/bin`, `/usr/sbin` read-only to Claude |
 | **Sudo blocked** | Claude cannot escalate privileges |
-| **Auth isolation** | Enterprise credentials stored at `~/.ai-sandbox/auth/`, separate from host Claude config |
 | **Settings merge** | User settings merged with container hooks; hooks cannot be overridden |
 | **Host VS Code isolation** | Settings sync blocked; Copilot blocked; extension versions pinned |
 
@@ -44,73 +43,63 @@ Base image: Ubuntu 24.04 LTS. Runs as non-root user `coder` with passwordless su
 # Build the image
 ./run.sh --build
 
-# Launch with API key settings file
-./run.sh ~/myproject --claude --settings ~/api-settings.json
+# Launch Claude Code
+./run.sh ~/myproject --claude --claude-dir ~/.my-claude-config
+```
 
-# Launch with interactive login
+## Authentication
+
+Use `--claude-dir` to mount any host directory as `~/.claude` inside the container. This is where Claude stores credentials, settings, and session history. The entrypoint merges any `settings.json` found in the directory with container security hooks (hooks always take priority).
+
+### API key mode
+
+Put your `settings.json` with the API key in a directory and point `--claude-dir` at it. Some providers require a specific Claude Code version — use `--claude-version` to pin it.
+
+```bash
+# Create a directory for API key config + session history
+mkdir -p ~/.ai-sandbox-api
+# Put your settings.json with API key there
+cp ~/my-api-settings.json ~/.ai-sandbox-api/settings.json
+
+# Run with it
+./run.sh ~/myproject --claude --claude-dir ~/.ai-sandbox-api --claude-version 2.1.98
+./dev.sh ~/myproject --claude-dir ~/.ai-sandbox-api --claude-version 2.1.98
+```
+
+### Enterprise / OAuth mode
+
+Point `--claude-dir` at a directory for persistent credentials. Log in once, it persists.
+
+```bash
+# Create a directory for enterprise credentials
+mkdir -p ~/.ai-sandbox/auth
+
+# First time — log in
+./run.sh ~/myproject --claude-dir ~/.ai-sandbox/auth
+# Inside container: claude auth login
+
+# Next time — auto-authenticated
+./run.sh ~/myproject --claude --claude-dir ~/.ai-sandbox/auth
+./dev.sh ~/myproject --claude-dir ~/.ai-sandbox/auth
+```
+
+### Ephemeral mode
+
+No `--claude-dir` — nothing persists. Log in every time.
+
+```bash
 ./run.sh ~/myproject --claude
+./dev.sh ~/myproject
 ```
 
-## Two authentication modes
-
-### Mode 1: API key via settings file
-
-For third-party API key providers. Pass a `settings.json` that contains your API key configuration. Session history is persisted at `~/.ai-sandbox-api/` on the host.
-
-The container merges your settings with its own security hooks (hooks always take priority and cannot be overridden). Some API key providers require a specific Claude Code version — use `--claude-version` to pin it.
+### Wipe credentials
 
 ```bash
-# Latest Claude Code + API key settings
-./run.sh ~/myproject --claude --settings ~/api-settings.json
-
-# Specific Claude Code version + API key settings
-./run.sh ~/myproject --claude --settings ~/api-settings.json --claude-version 1.0.5
-
-# Build a specific version first, then run
-./run.sh --build --claude-version 1.0.5
-./run.sh ~/myproject --claude --settings ~/api-settings.json --claude-version 1.0.5
-```
-
-With `dev.sh` (container + VS Code in one command):
-
-```bash
-./dev.sh ~/myproject --settings ~/api-settings.json
-./dev.sh ~/myproject --settings ~/api-settings.json --claude-version 1.0.5
-```
-
-To wipe API session history:
-
-```bash
+# API key mode
 rm -rf ~/.ai-sandbox-api
-```
 
-### Mode 2: Interactive login (enterprise / OAuth)
-
-No settings file needed. Just log in once — credentials and session history are persisted at `~/.ai-sandbox/auth/` on the host.
-
-```bash
-# First time — will prompt for login
-./run.sh ~/myproject
-claude auth login
-
-# Next time — auto-authenticated, no login needed
-./run.sh ~/myproject --claude
-```
-
-With `dev.sh`:
-
-```bash
-# First time — log in via VS Code terminal
-./dev.sh ~/myproject
-
-# Next time — just works
-./dev.sh ~/myproject
-```
-
-To wipe saved credentials and history:
-
-```bash
-rm -rf ~/.ai-sandbox
+# Enterprise mode
+rm -rf ~/.ai-sandbox/auth
 ```
 
 ## Usage reference
@@ -124,7 +113,7 @@ rm -rf ~/.ai-sandbox
 | Flag | Description |
 |------|-------------|
 | `--claude` | Launch Claude Code CLI directly instead of zsh shell |
-| `--settings <file>` | Pass a settings.json with API key (merged with container hooks) |
+| `--claude-dir <path>` | Mount a host directory as Claude config (`~/.claude` inside container) |
 | `--claude-version <version>` | Use a specific Claude Code version (default: latest) |
 | `--build` | Build or rebuild the Docker image |
 | `--help` | Show help |
@@ -139,7 +128,7 @@ Starts the container in the background and opens VS Code attached to it. Open a 
 
 | Flag | Description |
 |------|-------------|
-| `--settings <file>` | Pass a settings.json with API key |
+| `--claude-dir <path>` | Mount a host directory as Claude config |
 | `--claude-version <version>` | Use a specific Claude Code version (default: latest) |
 | `--stop <project-path>` | Stop the container for a specific project |
 | `--stop-all` | Stop all ai-sandbox containers |
@@ -150,8 +139,8 @@ Multiple projects can run simultaneously — each gets its own container named `
 
 ```bash
 # Run two projects at once
-./dev.sh ~/project-a --settings ~/api-settings.json
-./dev.sh ~/project-b
+./dev.sh ~/project-a --claude-dir ~/.ai-sandbox-api --claude-version 2.1.98
+./dev.sh ~/project-b --claude-dir ~/.ai-sandbox/auth
 
 # List running instances
 ./dev.sh --list
@@ -176,12 +165,12 @@ When using `dev.sh`, VS Code runs attached to the container with:
 - **Claude Code extension** pinned to `--claude-version` (if specified)
 - **Extension auto-update disabled**
 
-The devcontainer.json includes these workspace extensions: Python, debugpy, Ruff, Terraform, YAML, JSON, GitLens.
+Extensions installed in the container: Python, debugpy, Ruff, Terraform, YAML, JSON, GitLens, Claude Code.
 
 > **Important:** After changing the Dockerfile or entrypoint, rebuild all image versions you use:
 > ```bash
 > ./run.sh --build
-> ./run.sh --build --claude-version 1.0.5
+> ./run.sh --build --claude-version 2.1.98
 > ```
 
 ## Claude Code version management
@@ -190,12 +179,12 @@ The Claude Code version is baked into the image at build time. Each version gets
 
 ```bash
 # Build both versions
-./run.sh --build                        # -> ai-sandbox:latest
+./run.sh --build                          # -> ai-sandbox:latest
 ./run.sh --build --claude-version 2.1.98  # -> ai-sandbox:cc-2.1.98
 
 # Run different versions on different projects
-./dev.sh ~/project-a --settings ~/api-settings.json --claude-version 2.1.98
-./dev.sh ~/project-b
+./dev.sh ~/project-a --claude-dir ~/.ai-sandbox-api --claude-version 2.1.98
+./dev.sh ~/project-b --claude-dir ~/.ai-sandbox/auth
 
 # See all built images
 docker images ai-sandbox
@@ -257,11 +246,9 @@ PROJECT_DIR=~/myproject docker compose --profile interactive run --rm claude-int
 | Container path | Host source | When | Purpose |
 |----------------|-------------|------|---------|
 | `/home/coder/project` | Your project directory | Always | Working directory for code |
-| `/home/coder/.claude` | `~/.ai-sandbox/auth/` | Enterprise mode | Persistent credentials + session history |
-| `/home/coder/.claude` | `~/.ai-sandbox-api/` | API key mode | Persistent session history |
-| `/tmp/user-settings.json` | Settings file | API key mode | API key config (read-only) |
+| `/home/coder/.claude` | `--claude-dir` path | `--claude-dir` used | Persistent config, credentials, session history |
 
-The entrypoint overwrites `settings.json` with container security hooks on every startup, regardless of what's in the mounted directory.
+The entrypoint merges any `settings.json` found in the mounted directory with container security hooks on every startup. Hooks always take priority and cannot be overridden.
 
 **Colima note:** Only paths under your home directory are mounted into the Colima VM by default.
 
