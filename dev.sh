@@ -205,8 +205,13 @@ docker exec "${CONTAINER_NAME}" bash -c "
     mkdir -p /home/coder/.vscode-server/data/Machine
     cat > /home/coder/.vscode-server/data/Machine/settings.json <<'SETTINGS'
 {
-    \"terminal.integrated.defaultProfile.linux\": \"bash\",
-    \"telemetry.telemetryLevel\": \"off\"
+    \"terminal.integrated.defaultProfile.linux\": \"zsh\",
+    \"workbench.colorTheme\": \"Monokai\",
+    \"telemetry.telemetryLevel\": \"off\",
+    \"remote.extensionKind\": {
+        \"GitHub.copilot\": [\"ui\"],
+        \"GitHub.copilot-chat\": [\"ui\"]
+    }
 }
 SETTINGS
 " >/dev/null 2>&1
@@ -234,15 +239,12 @@ if command -v code >/dev/null 2>&1; then
         echo "Installing extensions inside container..."
         EXTENSIONS=(
             "ms-python.python"
-            "golang.go"
-            "rust-lang.rust-analyzer"
-            "dbaeumer.vscode-eslint"
-            "esbenp.prettier-vscode"
-            "eamodio.gitlens"
-            "timonwong.shellcheck"
-            "tamasfe.even-better-toml"
+            "ms-python.debugpy"
+            "charliermarsh.ruff"
+            "hashicorp.terraform"
             "redhat.vscode-yaml"
-            "ms-azuretools.vscode-docker"
+            "ZainChen.json"
+            "eamodio.gitlens"
         )
 
         # Claude Code extension — version-matched to CLI

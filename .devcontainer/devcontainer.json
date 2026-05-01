@@ -7,19 +7,17 @@
   "customizations": {
     "vscode": {
       "settings": {
-        "terminal.integrated.defaultProfile.linux": "bash"
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "workbench.colorTheme": "Monokai"
       },
       "extensions": [
         "ms-python.python",
-        "golang.go",
-        "rust-lang.rust-analyzer",
-        "dbaeumer.vscode-eslint",
-        "esbenp.prettier-vscode",
-        "eamodio.gitlens",
-        "timonwong.shellcheck",
-        "tamasfe.even-better-toml",
+        "ms-python.debugpy",
+        "charliermarsh.ruff",
+        "hashicorp.terraform",
         "redhat.vscode-yaml",
-        "ms-azuretools.vscode-docker"
+        "ZainChen.json",
+        "eamodio.gitlens"
       ]
     }
   }

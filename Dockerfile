@@ -34,6 +34,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tree \
     shellcheck \
     htop \
+    zsh \
+    openjdk-21-jdk-headless \
     && rm -rf /var/lib/apt/lists/*
 
 RUN locale-gen en_US.UTF-8
@@ -42,6 +44,11 @@ ENV LC_ALL=en_US.UTF-8
 
 # fd-find is packaged as fdfind on Ubuntu
 RUN ln -sf "$(which fdfind)" /usr/local/bin/fd
+
+# ── uv (Python package manager) ───────────────────────────────────
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
+    && mv /root/.local/bin/uv /usr/local/bin/ \
+    && mv /root/.local/bin/uvx /usr/local/bin/
 
 # ── GitHub CLI ────────────────────────────────────────────────────
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
@@ -117,6 +124,9 @@ COPY container-hooks/ /opt/ai-sandbox/hooks/
 RUN chmod +x /opt/ai-sandbox/hooks/*.sh
 COPY container-settings.json /opt/ai-sandbox/settings.json
 
+# ── Starship prompt ───────────────────────────────────────────────
+RUN curl -fsSL https://starship.rs/install.sh | sh -s -- -y
+
 # ── Global git hooks (gitleaks pre-commit) ────────────────────────
 COPY container-hooks/git/ /opt/ai-sandbox/git-hooks/
 RUN chmod +x /opt/ai-sandbox/git-hooks/* \
@@ -129,23 +139,89 @@ WORKDIR /home/${USER_NAME}
 RUN mkdir -p /home/${USER_NAME}/project \
     && mkdir -p /home/${USER_NAME}/.local/bin
 
+# Set zsh as default shell
+RUN sudo chsh -s "$(which zsh)" "${USER_NAME}"
+
 COPY --chown=${USER_NAME}:${USER_NAME} entrypoint.sh /home/${USER_NAME}/entrypoint.sh
 RUN chmod +x /home/${USER_NAME}/entrypoint.sh
 
-RUN cat >> /home/${USER_NAME}/.bashrc <<'BASHRC'
+# ── vim config ────────────────────────────────────────────────────
+RUN cat > /home/${USER_NAME}/.vimrc <<'VIMRC'
+syntax on
+set number
+set relativenumber
+set tabstop=4
+set shiftwidth=4
+set expandtab
+set autoindent
+set hlsearch
+set incsearch
+set ignorecase
+set smartcase
+set cursorline
+set wildmenu
+set showmatch
+colorscheme desert
+VIMRC
 
-# ai-sandbox prompt
-PS1='\[\033[01;32m\]ai-sandbox\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
+# ── zsh plugins ───────────────────────────────────────────────────
+RUN git clone https://github.com/zsh-users/zsh-autosuggestions /home/${USER_NAME}/.zsh/zsh-autosuggestions \
+    && git clone https://github.com/zsh-users/zsh-syntax-highlighting /home/${USER_NAME}/.zsh/zsh-syntax-highlighting \
+    && git clone https://github.com/zsh-users/zsh-history-substring-search /home/${USER_NAME}/.zsh/zsh-history-substring-search \
+    && git clone https://github.com/zsh-users/zsh-completions /home/${USER_NAME}/.zsh/zsh-completions
+
+# ── zsh config ────────────────────────────────────────────────────
+RUN cat > /home/${USER_NAME}/.zshrc <<'ZSHRC'
+export GOPATH="${HOME}/go"
+export PATH="${GOPATH}/bin:${HOME}/.local/bin:${PATH}"
+export PIP_BREAK_SYSTEM_PACKAGES=1
 
 alias ll='ls -alF'
 alias la='ls -A'
 
+# History
+HISTFILE=~/.zsh_history
+HISTSIZE=10000
+SAVEHIST=10000
+setopt SHARE_HISTORY
+setopt HIST_IGNORE_DUPS
+setopt HIST_IGNORE_SPACE
+setopt HIST_FIND_NO_DUPS
+setopt APPEND_HISTORY
+
+# Completions
+fpath=(~/.zsh/zsh-completions/src $fpath)
+autoload -Uz compinit && compinit
+zstyle ':completion:*' menu select
+zstyle ':completion:*' matcher-list 'm:{a-z}={A-Z}'
+
+# Plugins
+source ~/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh
+source ~/.zsh/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+source ~/.zsh/zsh-history-substring-search/zsh-history-substring-search.zsh
+
+# Key bindings for history substring search (up/down arrows)
+bindkey '^[[A' history-substring-search-up
+bindkey '^[[B' history-substring-search-down
+
+# Starship prompt
+eval "$(starship init zsh)"
+ZSHRC
+
+# ── bash fallback ─────────────────────────────────────────────────
+RUN cat >> /home/${USER_NAME}/.bashrc <<'BASHRC'
+
 export GOPATH="${HOME}/go"
 export PATH="${GOPATH}/bin:${HOME}/.local/bin:${PATH}"
 export PIP_BREAK_SYSTEM_PACKAGES=1
+
+alias ll='ls -alF'
+alias la='ls -A'
+
+eval "$(starship init bash)"
 BASHRC
 
 WORKDIR /home/${USER_NAME}/project
 
 ENTRYPOINT ["/home/coder/entrypoint.sh"]
-CMD ["bash"]
+CMD ["zsh"]
