@@ -6,17 +6,17 @@ Isolated Docker container for running Claude Code CLI with a full-stack developm
 
 | Category | Tools |
 |----------|-------|
-| Languages | Node.js 22 LTS, Python 3.12, Go 1.24, Rust stable |
+| Languages | Node.js 22 LTS, Python 3.12, Go 1.24, Rust stable, OpenJDK 21 |
+| Python | uv (package manager), ruff (linter/formatter) |
 | AI | Claude Code CLI (latest or pinned) |
 | Git | git, gh (GitHub CLI), gitleaks |
+| Shell | zsh (default) with starship prompt, autosuggestions, syntax highlighting, history search |
 | Dev tools | make, gcc, jq, ripgrep, fd, tmux, vim, nano, shellcheck, htop, tree |
 | Container | Docker CLI (socket-mount, no daemon) |
 
 Base image: Ubuntu 24.04 LTS. Runs as non-root user `coder` with passwordless sudo.
 
 ## Security
-
-The container enforces several security controls out of the box:
 
 | Control | How |
 |---------|-----|
@@ -69,7 +69,7 @@ Some API key providers require a specific Claude Code version. Use `--claude-ver
 ./run.sh ~/myproject --claude --settings ~/api-settings.json --claude-version 1.0.5
 ```
 
-With `dev.sh` (container + VS Code + Claude Code in one command):
+With `dev.sh` (container + VS Code in one command):
 
 ```bash
 ./dev.sh ~/myproject --settings ~/api-settings.json
@@ -78,10 +78,10 @@ With `dev.sh` (container + VS Code + Claude Code in one command):
 
 ### Mode 2: Interactive login (enterprise / OAuth)
 
-No settings file needed. Authenticate interactively inside the container each session. Always uses latest Claude Code.
+No settings file needed. Authenticate interactively inside the container each session.
 
 ```bash
-# Open bash, then authenticate
+# Open shell, then authenticate
 ./run.sh ~/myproject
 claude auth login
 
@@ -105,7 +105,7 @@ With `dev.sh`:
 
 | Flag | Description |
 |------|-------------|
-| `--claude` | Launch Claude Code CLI directly instead of bash |
+| `--claude` | Launch Claude Code CLI directly instead of zsh |
 | `--settings <file>` | Pass a settings.json with API key (merged with container hooks) |
 | `--claude-version <version>` | Use a specific Claude Code version (default: latest) |
 | `--build` | Build or rebuild the Docker image |
@@ -113,7 +113,7 @@ With `dev.sh`:
 
 ### dev.sh
 
-Starts the container in the background, opens VS Code attached to it, and launches Claude Code in your terminal.
+Starts the container in the background, opens VS Code attached to it, and installs version-matched extensions. Open a terminal in VS Code and run `claude` to start.
 
 ```
 ./dev.sh <project-path> [options]
@@ -123,10 +123,43 @@ Starts the container in the background, opens VS Code attached to it, and launch
 |------|-------------|
 | `--settings <file>` | Pass a settings.json with API key |
 | `--claude-version <version>` | Use a specific Claude Code version (default: latest) |
-| `--stop` | Stop the running dev container |
+| `--stop <project-path>` | Stop the container for a specific project |
+| `--stop-all` | Stop all ai-sandbox containers |
+| `--list` | List running ai-sandbox instances |
 | `--help` | Show help |
 
+Multiple projects can run simultaneously — each gets its own container named `ai-sandbox-<project-folder>`. If a project's container is already running, `dev.sh` reattaches instead of creating a duplicate.
+
+```bash
+# Run two projects at once
+./dev.sh ~/project-a --settings ~/api-settings.json
+./dev.sh ~/project-b
+
+# List running instances
+./dev.sh --list
+
+# Stop one project
+./dev.sh --stop ~/project-a
+
+# Stop all
+./dev.sh --stop-all
+```
+
 Requires VS Code with the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers).
+
+### VS Code extensions
+
+`dev.sh` installs extensions inside the container (isolated from host):
+
+- Python + debugpy (debugger)
+- Ruff (Astral linter/formatter)
+- Terraform
+- YAML
+- JSON
+- GitLens
+- Claude Code (version-matched to `--claude-version`)
+
+GitHub Copilot is blocked from running inside the container. Monokai theme is set by default.
 
 ## Claude Code version management
 
@@ -150,6 +183,21 @@ Images are tagged as:
 
 Auto-update is disabled inside the container. To update, rebuild the image.
 
+## Shell environment
+
+The container uses **zsh** as the default shell with:
+
+- **Starship** prompt (fast, minimal, Rust-based)
+- **zsh-autosuggestions** — ghost text from history as you type
+- **zsh-syntax-highlighting** — colors commands green/red (valid/invalid)
+- **zsh-history-substring-search** — up/down arrows filter history by what you've typed
+- **zsh-completions** — extra tab completions for many tools
+- History: 10k entries, deduplication, shared across sessions
+
+Bash is available as a fallback with the same starship prompt.
+
+Vim is configured with syntax highlighting, line numbers, and the desert colorscheme.
+
 ## Docker-in-Docker
 
 Mount the host's Docker socket to run Docker commands inside the sandbox:
@@ -167,7 +215,7 @@ The script auto-detects socket paths for Colima, `DOCKER_HOST`, and the standard
 For more structured usage:
 
 ```bash
-# Bash shell
+# Shell
 PROJECT_DIR=~/myproject docker compose run --rm claude
 
 # Claude Code directly
@@ -180,10 +228,6 @@ PROJECT_DIR=~/myproject docker compose --profile interactive run --rm claude-int
 | `CLAUDE_VERSION` | `latest` | Claude Code version for build |
 | `USER_UID` | `1000` | Container user UID (match your host) |
 | `USER_GID` | `1000` | Container user GID (match your host) |
-
-## VS Code integration
-
-A `.devcontainer/devcontainer.json` is included. It auto-installs workspace extensions for Python, Go, Rust, ESLint, Prettier, GitLens, ShellCheck, TOML, YAML, and Docker when VS Code attaches to the container.
 
 ## Volume mounts
 
@@ -225,5 +269,7 @@ All components are open source:
 | Colima | MIT |
 | Ubuntu 24.04 | Free (Canonical) |
 | Gitleaks | MIT |
+| Starship | ISC |
+| uv, ruff | MIT (Astral) |
 | Claude Code CLI | [Anthropic terms](https://www.anthropic.com/terms) |
-| Node.js, Python, Go, Rust | Various open source |
+| Node.js, Python, Go, Rust, OpenJDK | Various open source |
