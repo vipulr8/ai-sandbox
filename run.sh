@@ -175,5 +175,5 @@ fi
 if [ "$LAUNCH_CLAUDE" = true ]; then
     exec docker run "${DOCKER_ARGS[@]}" "${IMAGE}" claude
 else
-    exec docker run "${DOCKER_ARGS[@]}" "${IMAGE}" bash
+    exec docker run "${DOCKER_ARGS[@]}" "${IMAGE}" zsh
 fi

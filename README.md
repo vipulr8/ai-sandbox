@@ -1,6 +1,6 @@
 # ai-sandbox
 
-Isolated Docker container for running Claude Code CLI with a full-stack development toolchain.
+Isolated Docker container for running Claude Code with a full-stack development toolchain. Security-hardened: AI tools are sandboxed to the project directory with no access to host config, credentials, or system files.
 
 ## What's inside
 
@@ -8,7 +8,7 @@ Isolated Docker container for running Claude Code CLI with a full-stack developm
 |----------|-------|
 | Languages | Node.js 22 LTS, Python 3.12, Go 1.24, Rust stable, OpenJDK 21 |
 | Python | uv (package manager), ruff (linter/formatter) |
-| AI | Claude Code CLI (latest or pinned) |
+| AI | Claude Code CLI + VS Code extension (version-pinned) |
 | Git | git, gh (GitHub CLI), gitleaks |
 | Shell | zsh (default) with starship prompt, autosuggestions, syntax highlighting, history search |
 | Dev tools | make, gcc, jq, ripgrep, fd, tmux, vim, nano, shellcheck, htop, tree |
@@ -22,13 +22,15 @@ Base image: Ubuntu 24.04 LTS. Runs as non-root user `coder` with passwordless su
 |---------|-----|
 | **Filesystem isolation** | Only the mounted project directory is accessible |
 | **Gitleaks pre-commit** | Scans every commit for secrets automatically |
+| **Commit message scrubbing** | AI attribution lines stripped from commits |
 | **AI git push blocked** | Claude cannot push (local commits only); users retain full git access |
+| **AI GitHub publishing blocked** | `gh pr create`, `gh issue create`, etc. denied for Claude |
 | **Credential file access blocked** | `.env`, `.pem`, `.key`, `credentials.json`, etc. |
-| **System path writes blocked** | `/etc`, `/usr/bin`, `/usr/sbin` are read-only to Claude |
-| **GitHub publishing blocked** | `gh pr create`, `gh issue create`, etc. are denied for Claude |
+| **System path writes blocked** | `/etc`, `/usr/bin`, `/usr/sbin` read-only to Claude |
 | **Sudo blocked** | Claude cannot escalate privileges |
-| **Fresh auth each session** | No host config is mounted; authenticate inside the container |
-| **Settings merge** | User-provided settings are merged with container hooks; hooks cannot be overridden |
+| **Fresh auth each session** | No host config mounted; authenticate inside the container |
+| **Settings merge** | User settings merged with container hooks; hooks cannot be overridden |
+| **Host VS Code isolation** | Settings sync blocked; Copilot blocked; extension versions pinned |
 
 ## Prerequisites
 
@@ -105,7 +107,7 @@ With `dev.sh`:
 
 | Flag | Description |
 |------|-------------|
-| `--claude` | Launch Claude Code CLI directly instead of zsh |
+| `--claude` | Launch Claude Code CLI directly instead of zsh shell |
 | `--settings <file>` | Pass a settings.json with API key (merged with container hooks) |
 | `--claude-version <version>` | Use a specific Claude Code version (default: latest) |
 | `--build` | Build or rebuild the Docker image |
@@ -113,7 +115,7 @@ With `dev.sh`:
 
 ### dev.sh
 
-Starts the container in the background, opens VS Code attached to it, and installs version-matched extensions. Open a terminal in VS Code and run `claude` to start.
+Starts the container in the background and opens VS Code attached to it. Open a terminal in VS Code and run `claude` to start.
 
 ```
 ./dev.sh <project-path> [options]
@@ -147,39 +149,46 @@ Multiple projects can run simultaneously — each gets its own container named `
 
 Requires VS Code with the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers).
 
-### VS Code extensions
+### VS Code inside the container
 
-`dev.sh` installs extensions inside the container (isolated from host):
+When using `dev.sh`, VS Code runs attached to the container with:
 
-- Python + debugpy (debugger)
-- Ruff (Astral linter/formatter)
-- Terraform
-- YAML
-- JSON
-- GitLens
-- Claude Code (version-matched to `--claude-version`)
+- **Monokai** theme
+- **zsh** as default terminal
+- **Host settings sync disabled** — container has its own isolated settings
+- **GitHub Copilot blocked** from running inside the container
+- **Claude Code extension** pinned to `--claude-version` (if specified)
+- **Extension auto-update disabled**
 
-GitHub Copilot is blocked from running inside the container. Monokai theme is set by default.
+The devcontainer.json includes these workspace extensions: Python, debugpy, Ruff, Terraform, YAML, JSON, GitLens.
+
+> **Important:** After changing the Dockerfile or entrypoint, rebuild all image versions you use:
+> ```bash
+> ./run.sh --build
+> ./run.sh --build --claude-version 1.0.5
+> ```
 
 ## Claude Code version management
 
-The Claude Code version is baked into the image at build time. Each version gets its own image tag, so switching is fast after the first build.
+The Claude Code version is baked into the image at build time. Each version gets its own image tag. Multiple versions can coexist — they share cached layers (Ubuntu, Go, Rust, Node, etc.) so only the Claude Code layer differs.
 
 ```bash
-# Build with latest (default)
-./run.sh --build
+# Build both versions
+./run.sh --build                        # -> ai-sandbox:latest
+./run.sh --build --claude-version 2.1.98  # -> ai-sandbox:cc-2.1.98
 
-# Build with a specific version
-./run.sh --build --claude-version 1.0.5
+# Run different versions on different projects
+./dev.sh ~/project-a --settings ~/api-settings.json --claude-version 2.1.98
+./dev.sh ~/project-b
 
-# Run with a specific version (auto-builds if image doesn't exist)
-./run.sh ~/myproject --claude --claude-version 1.0.5
+# See all built images
+docker images ai-sandbox
 ```
 
 Images are tagged as:
 
 - `ai-sandbox:latest` for the latest version
-- `ai-sandbox:cc-1.0.5` for pinned versions
+- `ai-sandbox:cc-<version>` for pinned versions (e.g., `ai-sandbox:cc-2.1.98`)
 
 Auto-update is disabled inside the container. To update, rebuild the image.
 
@@ -193,8 +202,6 @@ The container uses **zsh** as the default shell with:
 - **zsh-history-substring-search** — up/down arrows filter history by what you've typed
 - **zsh-completions** — extra tab completions for many tools
 - History: 10k entries, deduplication, shared across sessions
-
-Bash is available as a fallback with the same starship prompt.
 
 Vim is configured with syntax highlighting, line numbers, and the desert colorscheme.
 

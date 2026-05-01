@@ -45,10 +45,12 @@ ENV LC_ALL=en_US.UTF-8
 # fd-find is packaged as fdfind on Ubuntu
 RUN ln -sf "$(which fdfind)" /usr/local/bin/fd
 
-# ── uv (Python package manager) ───────────────────────────────────
+# ── uv + ruff (Astral Python toolchain) ───────────────────────────
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
     && mv /root/.local/bin/uv /usr/local/bin/ \
-    && mv /root/.local/bin/uvx /usr/local/bin/
+    && mv /root/.local/bin/uvx /usr/local/bin/ \
+    && curl -LsSf https://astral.sh/ruff/install.sh | sh \
+    && mv /root/.local/bin/ruff /usr/local/bin/
 
 # ── GitHub CLI ────────────────────────────────────────────────────
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
