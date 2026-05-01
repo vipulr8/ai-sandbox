@@ -52,11 +52,13 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --claude-version)
-            CLAUDE_VERSION="$2"
+            CLAUDE_VERSION="${2:-}"
+            if [ -z "$CLAUDE_VERSION" ]; then echo "Error: --claude-version requires a version"; exit 1; fi
             shift 2
             ;;
         --settings)
-            SETTINGS_FILE="$2"
+            SETTINGS_FILE="${2:-}"
+            if [ -z "$SETTINGS_FILE" ]; then echo "Error: --settings requires a file path"; exit 1; fi
             shift 2
             ;;
         --build)

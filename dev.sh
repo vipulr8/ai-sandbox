@@ -64,11 +64,13 @@ EOF
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --settings)
-            SETTINGS_FILE="$2"
+            SETTINGS_FILE="${2:-}"
+            if [ -z "$SETTINGS_FILE" ]; then echo "Error: --settings requires a file path"; exit 1; fi
             shift 2
             ;;
         --claude-version)
-            CLAUDE_VERSION="$2"
+            CLAUDE_VERSION="${2:-}"
+            if [ -z "$CLAUDE_VERSION" ]; then echo "Error: --claude-version requires a version"; exit 1; fi
             shift 2
             ;;
         --stop)
@@ -132,9 +134,7 @@ list_instances
 # ── Check if this project already has a running container ─────────
 if docker ps -q -f "name=${CONTAINER_NAME}" | grep -q .; then
     echo "Container ${CONTAINER_NAME} is already running."
-    echo "Attaching Claude Code..."
-    echo ""
-    docker exec -it "${CONTAINER_NAME}" claude
+    echo "Open a terminal in VS Code and run: claude"
     exit 0
 fi
 
@@ -200,22 +200,75 @@ docker run -d \
     "${IMAGE}" \
     sleep infinity >/dev/null
 
+# ── Set isolated VS Code settings inside the container ────────────
+docker exec "${CONTAINER_NAME}" bash -c "
+    mkdir -p /home/coder/.vscode-server/data/Machine
+    cat > /home/coder/.vscode-server/data/Machine/settings.json <<'SETTINGS'
+{
+    \"terminal.integrated.defaultProfile.linux\": \"bash\",
+    \"telemetry.telemetryLevel\": \"off\"
+}
+SETTINGS
+" >/dev/null 2>&1
+
 # ── Open VS Code attached to container ────────────────────────────
 CONTAINER_HEX=$(printf '%s' "${CONTAINER_NAME}" | xxd -p | tr -d '\n')
 VSCODE_URI="vscode-remote://attached-container+${CONTAINER_HEX}/home/coder/project"
 
 echo "Opening VS Code..."
-code --folder-uri "${VSCODE_URI}" 2>/dev/null || {
+if command -v code >/dev/null 2>&1; then
+    code --folder-uri "${VSCODE_URI}"
+
+    # Wait for VS Code Server CLI to be ready inside the container
+    echo "Waiting for VS Code Server..."
+    VSCODE_CLI=""
+    for i in $(seq 1 60); do
+        VSCODE_CLI=$(docker exec "${CONTAINER_NAME}" bash -c 'ls ~/.vscode-server/bin/*/bin/code-server 2>/dev/null | head -1' 2>/dev/null)
+        if [ -n "$VSCODE_CLI" ]; then
+            break
+        fi
+        sleep 1
+    done
+
+    if [ -n "$VSCODE_CLI" ]; then
+        echo "Installing extensions inside container..."
+        EXTENSIONS=(
+            "ms-python.python"
+            "golang.go"
+            "rust-lang.rust-analyzer"
+            "dbaeumer.vscode-eslint"
+            "esbenp.prettier-vscode"
+            "eamodio.gitlens"
+            "timonwong.shellcheck"
+            "tamasfe.even-better-toml"
+            "redhat.vscode-yaml"
+            "ms-azuretools.vscode-docker"
+        )
+
+        # Claude Code extension — version-matched to CLI
+        if [ "$CLAUDE_VERSION" = "latest" ]; then
+            EXTENSIONS+=("anthropic.claude-code")
+        else
+            EXTENSIONS+=("anthropic.claude-code@${CLAUDE_VERSION}")
+        fi
+
+        EXT_ARGS=""
+        for ext in "${EXTENSIONS[@]}"; do
+            EXT_ARGS="${EXT_ARGS} --install-extension ${ext}"
+        done
+        docker exec "${CONTAINER_NAME}" bash -c "${VSCODE_CLI} ${EXT_ARGS} --force" 2>/dev/null
+        echo "Extensions installed. Reload VS Code window to activate."
+    else
+        echo "Warning: VS Code Server not ready. Install extensions manually."
+    fi
+else
     echo "Warning: 'code' CLI not found. Open VS Code manually:"
     echo "  1. Open VS Code"
     echo "  2. Cmd+Shift+P > 'Dev Containers: Attach to Running Container'"
     echo "  3. Select '${CONTAINER_NAME}'"
-}
+fi
 
-# ── Start Claude Code in an interactive terminal ──────────────────
+# ── Done ──────────────────────────────────────────────────────────
 echo ""
-echo "Launching Claude Code..."
-echo "  (VS Code is opening in the background)"
-echo "  (Use ./dev.sh --stop $(basename "$PROJECT_PATH") to shut down)"
-echo ""
-docker exec -it "${CONTAINER_NAME}" claude
+echo "Ready! Open a terminal in VS Code and run: claude"
+echo "Stop with: ./dev.sh --stop $(basename "$PROJECT_PATH")"
