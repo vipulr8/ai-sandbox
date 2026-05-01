@@ -55,9 +55,9 @@ Base image: Ubuntu 24.04 LTS. Runs as non-root user `coder` with passwordless su
 
 ### Mode 1: API key via settings file
 
-For third-party API key providers. Pass a `settings.json` that contains your API key configuration. The container merges it with its own security hooks (hooks always take priority and cannot be overridden).
+For third-party API key providers. Pass a `settings.json` that contains your API key configuration. Session history is persisted at `~/.ai-sandbox-api/` on the host.
 
-Some API key providers require a specific Claude Code version. Use `--claude-version` to pin it.
+The container merges your settings with its own security hooks (hooks always take priority and cannot be overridden). Some API key providers require a specific Claude Code version — use `--claude-version` to pin it.
 
 ```bash
 # Latest Claude Code + API key settings
@@ -78,9 +78,15 @@ With `dev.sh` (container + VS Code in one command):
 ./dev.sh ~/myproject --settings ~/api-settings.json --claude-version 1.0.5
 ```
 
+To wipe API session history:
+
+```bash
+rm -rf ~/.ai-sandbox-api
+```
+
 ### Mode 2: Interactive login (enterprise / OAuth)
 
-No settings file needed. Credentials are persisted at `~/.ai-sandbox/auth/` on the host so you only need to log in once.
+No settings file needed. Just log in once — credentials and session history are persisted at `~/.ai-sandbox/auth/` on the host.
 
 ```bash
 # First time — will prompt for login
@@ -101,7 +107,7 @@ With `dev.sh`:
 ./dev.sh ~/myproject
 ```
 
-To wipe saved credentials:
+To wipe saved credentials and history:
 
 ```bash
 rm -rf ~/.ai-sandbox
@@ -251,10 +257,11 @@ PROJECT_DIR=~/myproject docker compose --profile interactive run --rm claude-int
 | Container path | Host source | When | Purpose |
 |----------------|-------------|------|---------|
 | `/home/coder/project` | Your project directory | Always | Working directory for code |
-| `/home/coder/.claude` | `~/.ai-sandbox/auth/` | No `--settings` | Persistent enterprise/OAuth credentials |
-| `/tmp/user-settings.json` | Settings file | `--settings` used | API key config (read-only) |
+| `/home/coder/.claude` | `~/.ai-sandbox/auth/` | Enterprise mode | Persistent credentials + session history |
+| `/home/coder/.claude` | `~/.ai-sandbox-api/` | API key mode | Persistent session history |
+| `/tmp/user-settings.json` | Settings file | API key mode | API key config (read-only) |
 
-The entrypoint overwrites `settings.json` with container security hooks on every startup, regardless of what's in the mounted auth directory.
+The entrypoint overwrites `settings.json` with container security hooks on every startup, regardless of what's in the mounted directory.
 
 **Colima note:** Only paths under your home directory are mounted into the Colima VM by default.
 

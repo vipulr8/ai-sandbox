@@ -183,9 +183,10 @@ if [ -n "$SETTINGS_FILE" ]; then
         exit 1
     fi
     SETTINGS_FILE="$(cd "$(dirname "$SETTINGS_FILE")" && pwd)/$(basename "$SETTINGS_FILE")"
+    mkdir -p "$HOME/.ai-sandbox-api"
+    AUTH_ARGS=(-v "$HOME/.ai-sandbox-api:/home/coder/.claude")
     SETTINGS_ARGS=(-v "${SETTINGS_FILE}:/tmp/user-settings.json:ro")
 else
-    # Mount .claude-docker/ for persistent enterprise/OAuth auth
     mkdir -p "$HOME/.ai-sandbox/auth"
     AUTH_ARGS=(-v "$HOME/.ai-sandbox/auth:/home/coder/.claude")
 fi
