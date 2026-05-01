@@ -200,7 +200,7 @@ docker run -d \
     "${IMAGE}" \
     sleep infinity >/dev/null
 
-# ── Set isolated VS Code settings inside the container ────────────
+# ── Block unwanted extensions from syncing into container ─────────
 docker exec "${CONTAINER_NAME}" bash -c "
     mkdir -p /home/coder/.vscode-server/data/Machine
     cat > /home/coder/.vscode-server/data/Machine/settings.json <<'SETTINGS'
@@ -209,6 +209,7 @@ docker exec "${CONTAINER_NAME}" bash -c "
     \"workbench.colorTheme\": \"Monokai\",
     \"telemetry.telemetryLevel\": \"off\",
     \"remote.extensionKind\": {
+        \"anthropic.claude-code\": [\"ui\"],
         \"GitHub.copilot\": [\"ui\"],
         \"GitHub.copilot-chat\": [\"ui\"]
     }
@@ -221,54 +222,9 @@ CONTAINER_HEX=$(printf '%s' "${CONTAINER_NAME}" | xxd -p | tr -d '\n')
 VSCODE_URI="vscode-remote://attached-container+${CONTAINER_HEX}/home/coder/project"
 
 echo "Opening VS Code..."
-if command -v code >/dev/null 2>&1; then
-    code --folder-uri "${VSCODE_URI}"
-
-    # Wait for VS Code Server CLI to be ready inside the container
-    echo "Waiting for VS Code Server..."
-    VSCODE_CLI=""
-    for i in $(seq 1 60); do
-        VSCODE_CLI=$(docker exec "${CONTAINER_NAME}" bash -c 'ls ~/.vscode-server/bin/*/bin/code-server 2>/dev/null | head -1' 2>/dev/null)
-        if [ -n "$VSCODE_CLI" ]; then
-            break
-        fi
-        sleep 1
-    done
-
-    if [ -n "$VSCODE_CLI" ]; then
-        echo "Installing extensions inside container..."
-        EXTENSIONS=(
-            "ms-python.python"
-            "ms-python.debugpy"
-            "charliermarsh.ruff"
-            "hashicorp.terraform"
-            "redhat.vscode-yaml"
-            "ZainChen.json"
-            "eamodio.gitlens"
-        )
-
-        # Claude Code extension — version-matched to CLI
-        if [ "$CLAUDE_VERSION" = "latest" ]; then
-            EXTENSIONS+=("anthropic.claude-code")
-        else
-            EXTENSIONS+=("anthropic.claude-code@${CLAUDE_VERSION}")
-        fi
-
-        EXT_ARGS=""
-        for ext in "${EXTENSIONS[@]}"; do
-            EXT_ARGS="${EXT_ARGS} --install-extension ${ext}"
-        done
-        docker exec "${CONTAINER_NAME}" bash -c "${VSCODE_CLI} ${EXT_ARGS} --force" 2>/dev/null
-        echo "Extensions installed. Reload VS Code window to activate."
-    else
-        echo "Warning: VS Code Server not ready. Install extensions manually."
-    fi
-else
-    echo "Warning: 'code' CLI not found. Open VS Code manually:"
-    echo "  1. Open VS Code"
-    echo "  2. Cmd+Shift+P > 'Dev Containers: Attach to Running Container'"
-    echo "  3. Select '${CONTAINER_NAME}'"
-fi
+code --folder-uri "${VSCODE_URI}" 2>/dev/null || {
+    echo "Warning: 'code' CLI not found. Attach manually in VS Code."
+}
 
 # ── Done ──────────────────────────────────────────────────────────
 echo ""
