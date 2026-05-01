@@ -209,29 +209,36 @@ code --folder-uri "${VSCODE_URI}" 2>/dev/null || {
     echo "Warning: 'code' CLI not found. Attach manually in VS Code."
 }
 
-# ── Pin Claude Code extension version inside container ────────────
-if [ "$CLAUDE_VERSION" != "latest" ]; then
-    echo "Pinning Claude Code extension to v${CLAUDE_VERSION}..."
-    # Write a script inside the container that pins the extension.
-    # It runs in the background, retrying to handle VS Code reloads.
-    docker exec "${CONTAINER_NAME}" bash -c "cat > /tmp/pin-extension.sh <<'SCRIPT'
+# ── Install extensions inside container ────────────────────────────
+echo "Setting up VS Code extensions..."
+if [ "$CLAUDE_VERSION" = "latest" ]; then
+    CLAUDE_EXT="anthropic.claude-code"
+else
+    CLAUDE_EXT="anthropic.claude-code@${CLAUDE_VERSION}"
+fi
+
+docker exec "${CONTAINER_NAME}" bash -c "cat > /tmp/setup-extensions.sh <<SCRIPT
 #!/bin/bash
 for attempt in 1 2 3 4 5; do
-    CLI=\$(ls ~/.vscode-server/bin/*/bin/code-server 2>/dev/null | head -1)
-    [ -z \"\$CLI\" ] && sleep 10 && continue
-    CURRENT=\$(\$CLI --list-extensions --show-versions 2>/dev/null | grep anthropic.claude-code | cut -d@ -f2)
-    if [ \"\$CURRENT\" != \"${CLAUDE_VERSION}\" ]; then
-        \$CLI --uninstall-extension anthropic.claude-code 2>/dev/null
-        \$CLI --install-extension anthropic.claude-code@${CLAUDE_VERSION} --force 2>/dev/null
-    fi
+    CLI=\\\$(ls ~/.vscode-server/bin/*/bin/code-server 2>/dev/null | head -1)
+    [ -z \"\\\$CLI\" ] && sleep 10 && continue
+
+    # Install all workspace extensions
+    \\\$CLI --install-extension ms-python.python --force 2>/dev/null
+    \\\$CLI --install-extension ms-python.debugpy --force 2>/dev/null
+    \\\$CLI --install-extension charliermarsh.ruff --force 2>/dev/null
+    \\\$CLI --install-extension hashicorp.terraform --force 2>/dev/null
+    \\\$CLI --install-extension redhat.vscode-yaml --force 2>/dev/null
+    \\\$CLI --install-extension ZainChen.json --force 2>/dev/null
+    \\\$CLI --install-extension eamodio.gitlens --force 2>/dev/null
+    \\\$CLI --install-extension ${CLAUDE_EXT} --force 2>/dev/null
+
     sleep 15
 done
 SCRIPT
-chmod +x /tmp/pin-extension.sh
-nohup /tmp/pin-extension.sh >/dev/null 2>&1 &"
-    echo "Extension will be pinned to v${CLAUDE_VERSION} (runs in background)."
-    echo "If version changes after reload, wait ~15s and reload again."
-fi
+chmod +x /tmp/setup-extensions.sh
+nohup /tmp/setup-extensions.sh >/dev/null 2>&1 &"
+echo "Extensions installing in background."
 
 # ── Done ──────────────────────────────────────────────────────────
 echo ""
