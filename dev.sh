@@ -176,6 +176,7 @@ fi
 
 # ── Settings file mount ───────────────────────────────────────────
 SETTINGS_ARGS=()
+AUTH_ARGS=()
 if [ -n "$SETTINGS_FILE" ]; then
     if [ ! -f "$SETTINGS_FILE" ]; then
         echo "Error: Settings file not found: $SETTINGS_FILE"
@@ -183,6 +184,10 @@ if [ -n "$SETTINGS_FILE" ]; then
     fi
     SETTINGS_FILE="$(cd "$(dirname "$SETTINGS_FILE")" && pwd)/$(basename "$SETTINGS_FILE")"
     SETTINGS_ARGS=(-v "${SETTINGS_FILE}:/tmp/user-settings.json:ro")
+else
+    # Mount .claude-docker/ for persistent enterprise/OAuth auth
+    mkdir -p "$HOME/.ai-sandbox/auth"
+    AUTH_ARGS=(-v "$HOME/.ai-sandbox/auth:/home/coder/.claude")
 fi
 
 # ── Start container in background ─────────────────────────────────
@@ -196,6 +201,7 @@ docker run -d \
     -e "TERM=${TERM:-xterm-256color}" \
     "${DOCKER_SOCK_ARGS[@]+"${DOCKER_SOCK_ARGS[@]}"}" \
     "${SETTINGS_ARGS[@]+"${SETTINGS_ARGS[@]}"}" \
+    "${AUTH_ARGS[@]+"${AUTH_ARGS[@]}"}" \
     -w /home/coder/project \
     "${IMAGE}" \
     sleep infinity >/dev/null

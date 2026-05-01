@@ -28,7 +28,7 @@ Base image: Ubuntu 24.04 LTS. Runs as non-root user `coder` with passwordless su
 | **Credential file access blocked** | `.env`, `.pem`, `.key`, `credentials.json`, etc. |
 | **System path writes blocked** | `/etc`, `/usr/bin`, `/usr/sbin` read-only to Claude |
 | **Sudo blocked** | Claude cannot escalate privileges |
-| **Fresh auth each session** | No host config mounted; authenticate inside the container |
+| **Auth isolation** | Enterprise credentials stored at `~/.ai-sandbox/auth/`, separate from host Claude config |
 | **Settings merge** | User settings merged with container hooks; hooks cannot be overridden |
 | **Host VS Code isolation** | Settings sync blocked; Copilot blocked; extension versions pinned |
 
@@ -80,21 +80,31 @@ With `dev.sh` (container + VS Code in one command):
 
 ### Mode 2: Interactive login (enterprise / OAuth)
 
-No settings file needed. Authenticate interactively inside the container each session.
+No settings file needed. Credentials are persisted at `~/.ai-sandbox/auth/` on the host so you only need to log in once.
 
 ```bash
-# Open shell, then authenticate
+# First time — will prompt for login
 ./run.sh ~/myproject
 claude auth login
 
-# Or launch Claude Code directly (it will prompt for login)
+# Next time — auto-authenticated, no login needed
 ./run.sh ~/myproject --claude
 ```
 
 With `dev.sh`:
 
 ```bash
+# First time — log in via VS Code terminal
 ./dev.sh ~/myproject
+
+# Next time — just works
+./dev.sh ~/myproject
+```
+
+To wipe saved credentials:
+
+```bash
+rm -rf ~/.ai-sandbox
 ```
 
 ## Usage reference
@@ -238,12 +248,13 @@ PROJECT_DIR=~/myproject docker compose --profile interactive run --rm claude-int
 
 ## Volume mounts
 
-| Container path | Host source | Purpose |
-|----------------|-------------|---------|
-| `/home/coder/project` | Your project directory | Working directory for code |
-| `/tmp/user-settings.json` | Settings file (if `--settings` used) | API key config (read-only) |
+| Container path | Host source | When | Purpose |
+|----------------|-------------|------|---------|
+| `/home/coder/project` | Your project directory | Always | Working directory for code |
+| `/home/coder/.claude` | `~/.ai-sandbox/auth/` | No `--settings` | Persistent enterprise/OAuth credentials |
+| `/tmp/user-settings.json` | Settings file | `--settings` used | API key config (read-only) |
 
-No other host directories are mounted. Claude Code config and auth live inside the container only.
+The entrypoint overwrites `settings.json` with container security hooks on every startup, regardless of what's in the mounted auth directory.
 
 **Colima note:** Only paths under your home directory are mounted into the Colima VM by default.
 
