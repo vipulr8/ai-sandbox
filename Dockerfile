@@ -148,6 +148,24 @@ ENV SHELL=/usr/bin/zsh
 COPY --chown=${USER_NAME}:${USER_NAME} entrypoint.sh /home/${USER_NAME}/entrypoint.sh
 RUN chmod +x /home/${USER_NAME}/entrypoint.sh
 
+# ── Layer 8.5: VS Code extensions (baked at build time) ──────────
+# Why baked: the previous post-attach `docker exec --install-extension` loop
+# in dev.sh raced VS Code Server's first-attach setup and silently failed when
+# the marketplace was slow. Baking extensions makes the image deterministic.
+#
+# CLAUDE_VERSION (declared in Layer 7) is exported into the RUN environment so
+# the install script's per-line ${CLAUDE_VERSION} substitution resolves to the
+# same value used for the npm CLI install — keeping the VS Code extension
+# version coupled to the bundled CLI version with no separate plumbing.
+COPY --chown=${USER_NAME}:${USER_NAME} vscode-extensions.txt /home/${USER_NAME}/vscode-extensions.txt
+COPY --chown=${USER_NAME}:${USER_NAME} scripts/install-vscode-extensions.sh /home/${USER_NAME}/install-vscode-extensions.sh
+RUN chmod +x /home/${USER_NAME}/install-vscode-extensions.sh \
+    && CLAUDE_VERSION="${CLAUDE_VERSION}" \
+       /home/${USER_NAME}/install-vscode-extensions.sh \
+           /home/${USER_NAME}/vscode-extensions.txt \
+    && rm /home/${USER_NAME}/install-vscode-extensions.sh \
+          /home/${USER_NAME}/vscode-extensions.txt
+
 # ── vim config ────────────────────────────────────────────────────
 RUN cat > /home/${USER_NAME}/.vimrc <<'VIMRC'
 syntax on
