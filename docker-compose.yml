@@ -9,7 +9,9 @@ services:
         USER_UID: ${USER_UID:-1000}
         USER_GID: ${USER_GID:-1000}
         CLAUDE_VERSION: ${CLAUDE_VERSION:-latest}
-    image: ai-sandbox:${CLAUDE_VERSION_TAG:-latest}
+    # Default to the published GHCR image so `docker compose pull` works without a build.
+    # Override with IMAGE=ai-sandbox:latest for purely local builds.
+    image: ${IMAGE:-ghcr.io/vipulr8/ai-sandbox:${CLAUDE_VERSION_TAG:-latest}}
     container_name: ai-sandbox
     hostname: ai-sandbox
 

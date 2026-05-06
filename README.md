@@ -2,6 +2,8 @@
 
 Isolated Docker container for running Claude Code with a full-stack development toolchain. Security-hardened: AI tools are sandboxed to the project directory with no access to host config, credentials, or system files.
 
+> **Supported platform: macOS only.** The image bakes UID 1000 at build time and relies on Docker Desktop / Colima translating UIDs across the bind-mount boundary. On Linux hosts with UID ≠ 1000, files written into bind-mounted directories will appear owned by 1000 on the host. Linux support is intentionally out of scope.
+
 ## What's inside
 
 | Category | Tools |
@@ -33,19 +35,29 @@ Base image: Ubuntu 24.04 LTS. Runs as non-root user `coder` with passwordless su
 
 ## Prerequisites
 
-- A container runtime (e.g., [Colima](https://github.com/abapGit/colima), Docker Desktop, or similar)
+- macOS host
+- A container runtime (e.g., [Colima](https://github.com/abapGit/colima) or Docker Desktop)
 - Docker CLI (`brew install docker` on macOS)
 - docker-buildx plugin (`brew install docker-buildx` on macOS)
 
 ## Quick start
 
 ```bash
-# Build the image
-./run.sh --build
+# Option A: pull the prebuilt image from GHCR (fastest, no build needed)
+./run.sh --pull
+./run.sh ~/myproject --claude --claude-dir ~/.my-claude-config
 
-# Launch Claude Code
+# Option B: build locally
+./run.sh --build
 ./run.sh ~/myproject --claude --claude-dir ~/.my-claude-config
 ```
+
+### Pulling vs building
+
+- **`--pull`** fetches the image from `ghcr.io/vipulr8/ai-sandbox` and tags it locally as `ai-sandbox:<tag>`. CI builds it multi-arch (amd64/arm64) on every push to main, weekly, and on `cc-*` / `v*` tags.
+- **`--build`** builds from source against the current working tree. Use this when you've edited the `Dockerfile`, `entrypoint.sh`, `container-hooks/`, or `container-settings.json`.
+
+You can mix: pull a baseline, edit something locally, then `--build` to override.
 
 ## Authentication
 
@@ -115,7 +127,8 @@ rm -rf ~/.ai-sandbox/auth
 | `--claude` | Launch Claude Code CLI directly instead of zsh shell |
 | `--claude-dir <path>` | Mount a host directory as Claude config (`~/.claude` inside container) |
 | `--claude-version <version>` | Use a specific Claude Code version (default: latest) |
-| `--build` | Build or rebuild the Docker image |
+| `--build` | Build or rebuild the Docker image locally |
+| `--pull` | Pull the prebuilt image from `ghcr.io/vipulr8/ai-sandbox` |
 | `--help` | Show help |
 
 ### dev.sh
@@ -130,6 +143,7 @@ Starts the container in the background and opens VS Code attached to it. Open a 
 |------|-------------|
 | `--claude-dir <path>` | Mount a host directory as Claude config |
 | `--claude-version <version>` | Use a specific Claude Code version (default: latest) |
+| `--pull` | Pull the prebuilt image from `ghcr.io/vipulr8/ai-sandbox` |
 | `--stop <project-path>` | Stop the container for a specific project |
 | `--stop-all` | Stop all ai-sandbox containers |
 | `--list` | List running ai-sandbox instances |
@@ -227,6 +241,9 @@ The script auto-detects socket paths for Colima, `DOCKER_HOST`, and the standard
 For more structured usage:
 
 ```bash
+# Pull the prebuilt image
+docker compose pull
+
 # Shell
 PROJECT_DIR=~/myproject docker compose run --rm claude
 
@@ -237,9 +254,11 @@ PROJECT_DIR=~/myproject docker compose --profile interactive run --rm claude-int
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PROJECT_DIR` | `.` | Project directory to mount |
-| `CLAUDE_VERSION` | `latest` | Claude Code version for build |
-| `USER_UID` | `1000` | Container user UID (match your host) |
-| `USER_GID` | `1000` | Container user GID (match your host) |
+| `IMAGE` | `ghcr.io/vipulr8/ai-sandbox:${CLAUDE_VERSION_TAG:-latest}` | Image to run; override for purely local builds (e.g. `ai-sandbox:latest`) |
+| `CLAUDE_VERSION_TAG` | `latest` | Tag suffix used in the default image name |
+| `CLAUDE_VERSION` | `latest` | Claude Code version for build (only relevant when building locally) |
+| `USER_UID` | `1000` | Container user UID (build-time only; runtime is hardcoded to 1000) |
+| `USER_GID` | `1000` | Container user GID (build-time only; runtime is hardcoded to 1000) |
 
 ## Volume mounts
 
