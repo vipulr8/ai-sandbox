@@ -1,0 +1,19 @@
+# Single source of truth for VS Code extensions baked into the ai-sandbox image.
+#
+# Format:
+#   - One `publisher.extension[@version]` ID per line.
+#   - Lines starting with `#` and blank lines are ignored.
+#   - Build-time env vars are expanded (currently: ${CLAUDE_VERSION}).
+#
+# Routing in scripts/install-vscode-extensions.sh:
+#   - No `@version`        → CLI install (resolves to latest)
+#   - `@latest`            → CLI install (resolves to latest)
+#   - `@<specific-version>` → direct VSIX download from the marketplace asset URL
+ms-python.python
+ms-python.debugpy
+charliermarsh.ruff
+hashicorp.terraform
+redhat.vscode-yaml
+ZainChen.json
+eamodio.gitlens
+anthropic.claude-code@${CLAUDE_VERSION}
