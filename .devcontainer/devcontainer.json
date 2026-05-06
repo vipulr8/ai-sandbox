@@ -17,7 +17,8 @@
         "hashicorp.terraform",
         "redhat.vscode-yaml",
         "ZainChen.json",
-        "eamodio.gitlens"
+        "eamodio.gitlens",
+        "anthropic.claude-code"
       ]
     }
   }

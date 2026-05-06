@@ -221,36 +221,6 @@ code --folder-uri "${VSCODE_URI}" 2>/dev/null || {
     echo "Warning: 'code' CLI not found. Attach manually in VS Code."
 }
 
-# ── Install extensions inside container ────────────────────────────
-echo "Setting up VS Code extensions..."
-if [ "$CLAUDE_VERSION" = "latest" ]; then
-    CLAUDE_EXT="anthropic.claude-code"
-else
-    CLAUDE_EXT="anthropic.claude-code@${CLAUDE_VERSION}"
-fi
-
-docker exec "${CONTAINER_NAME}" bash -c "cat > /tmp/setup-extensions.sh <<SCRIPT
-#!/bin/bash
-for attempt in 1 2 3 4 5; do
-    CLI=\\\$(ls ~/.vscode-server/bin/*/bin/code-server 2>/dev/null | head -1)
-    [ -z \"\\\$CLI\" ] && sleep 10 && continue
-
-    \\\$CLI --install-extension ms-python.python --force 2>/dev/null
-    \\\$CLI --install-extension ms-python.debugpy --force 2>/dev/null
-    \\\$CLI --install-extension charliermarsh.ruff --force 2>/dev/null
-    \\\$CLI --install-extension hashicorp.terraform --force 2>/dev/null
-    \\\$CLI --install-extension redhat.vscode-yaml --force 2>/dev/null
-    \\\$CLI --install-extension ZainChen.json --force 2>/dev/null
-    \\\$CLI --install-extension eamodio.gitlens --force 2>/dev/null
-    \\\$CLI --install-extension ${CLAUDE_EXT} --force 2>/dev/null
-
-    sleep 15
-done
-SCRIPT
-chmod +x /tmp/setup-extensions.sh
-nohup /tmp/setup-extensions.sh >/dev/null 2>&1 &"
-echo "Extensions installing in background."
-
 # ── Done ──────────────────────────────────────────────────────────
 echo ""
 echo "Ready! Open a terminal in VS Code and run: claude"

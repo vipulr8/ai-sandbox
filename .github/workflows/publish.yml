@@ -19,6 +19,8 @@ on:
       - entrypoint.sh
       - container-settings.json
       - container-hooks/**
+      - vscode-extensions.txt
+      - scripts/install-vscode-extensions.sh
       - .github/workflows/publish.yml
   schedule:
     - cron: '0 6 * * 1'
