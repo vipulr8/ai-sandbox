@@ -181,6 +181,14 @@ When using `dev.sh`, VS Code runs attached to the container with:
 
 Extensions installed in the container: Python, debugpy, Ruff, Terraform, YAML, JSON, GitLens, Claude Code.
 
+The first 7 are **baked into the image** at build time (single source of truth: `vscode-extensions.txt`) so they're present the moment the container starts. The Claude Code extension is installed **post-attach** by `dev.sh` (`docker exec -d ... code-server --install-extension --force`) so its install hook fires inside VS Code Server's running context — that path initializes the extension's auth state from your `settings.json` env block, which the bake-time install path skips. Watch the install with:
+
+```bash
+docker exec ai-sandbox-<project> cat /tmp/install-claude-ext.log
+```
+
+Pinned versions of the Claude extension are honored: `--claude-version 2.1.98` installs `anthropic.claude-code@2.1.98`.
+
 > **Important:** After changing the Dockerfile or entrypoint, rebuild all image versions you use:
 > ```bash
 > ./run.sh --build
