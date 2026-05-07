@@ -221,6 +221,40 @@ code --folder-uri "${VSCODE_URI}" 2>/dev/null || {
     echo "Warning: 'code' CLI not found. Attach manually in VS Code."
 }
 
+# ── Install Claude extension post-attach ──────────────────────────
+# The 7 non-Claude extensions are baked into the image (see vscode-extensions.txt).
+# Anthropic's extension is intentionally NOT baked: bake-time install skips the
+# extension's install hook, leaving API-mode auth state uninitialized. Installing
+# via VS Code's own code-server post-attach re-fires the hook and initializes
+# auth from settings.json's env block.
+if [ "$CLAUDE_VERSION" = "latest" ]; then
+    CLAUDE_EXT="anthropic.claude-code"
+else
+    CLAUDE_EXT="anthropic.claude-code@${CLAUDE_VERSION}"
+fi
+
+# `docker exec -d` runs detached (returns immediately). The bash -c body uses
+# escaped \$ for variables that should be evaluated when each loop iteration
+# runs — NOT at script-write time.
+docker exec -d "${CONTAINER_NAME}" bash -c "
+LOG=/tmp/install-claude-ext.log
+: > \"\$LOG\"
+echo \"[\$(date +%T)] Polling for VS Code Server's code-server (up to 120s)\" >> \"\$LOG\"
+for attempt in \$(seq 1 24); do
+    CLI=\$(ls ~/.vscode-server/bin/*/bin/code-server 2>/dev/null | head -1)
+    if [ -n \"\$CLI\" ]; then
+        echo \"[\$(date +%T)] Installing ${CLAUDE_EXT} via \$CLI\" >> \"\$LOG\"
+        \"\$CLI\" --install-extension ${CLAUDE_EXT} --force >> \"\$LOG\" 2>&1
+        echo \"[\$(date +%T)] Done (exit \$?).\" >> \"\$LOG\"
+        exit 0
+    fi
+    sleep 5
+done
+echo \"[\$(date +%T)] Gave up after 120s — VS Code Server's code-server never appeared.\" >> \"\$LOG\"
+exit 1
+"
+echo "Claude extension install scheduled (post-attach). Logs: docker exec ${CONTAINER_NAME} cat /tmp/install-claude-ext.log"
+
 # ── Done ──────────────────────────────────────────────────────────
 echo ""
 echo "Ready! Open a terminal in VS Code and run: claude"
