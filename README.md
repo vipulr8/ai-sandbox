@@ -20,18 +20,18 @@ Base image: Ubuntu 24.04 LTS. Runs as non-root user `coder` with passwordless su
 
 ## Security
 
+The container itself is the primary isolation boundary — host secrets (SSH keys, GPG keys, AWS / kube credentials, etc.) aren't visible inside unless you mount them. On top of that, the image adds:
+
 | Control | How |
 |---------|-----|
-| **Filesystem isolation** | Only the mounted project directory is accessible |
-| **Gitleaks pre-commit** | Scans every commit for secrets automatically |
-| **Commit message scrubbing** | AI attribution lines stripped from commits |
-| **AI git push blocked** | Claude cannot push (local commits only); users retain full git access |
-| **AI GitHub publishing blocked** | `gh pr create`, `gh issue create`, etc. denied for Claude |
-| **Credential file access blocked** | `.env`, `.pem`, `.key`, `credentials.json`, etc. |
-| **System path writes blocked** | `/etc`, `/usr/bin`, `/usr/sbin` read-only to Claude |
-| **Sudo blocked** | Claude cannot escalate privileges |
-| **Settings merge** | User settings merged with container hooks; hooks cannot be overridden |
-| **Host VS Code isolation** | Settings sync blocked; Copilot blocked; extension versions pinned |
+| **AI git push blocked** | PreToolUse hook denies any `git push` / `git remote add|set-url` Bash command from Claude. Users running `git push` themselves inside the container are unaffected. |
+| **AI GitHub publishing blocked** | Same hook denies `gh pr create|merge|comment`, `gh issue create|comment`, `gh release create`, `gh repo create|delete` from Claude. |
+| **Gitleaks pre-commit** | Wired up at build via `git config --system core.hooksPath`. Scans every commit for secrets automatically. |
+| **Commit message scrubbing** | `commit-msg` git hook strips Claude/Anthropic `Co-Authored-By` and "Generated with Claude" lines. |
+| **Settings merge** | User-supplied `settings.json` is merged with container hooks via `jq -s '.[0] * .[1]'` so the container hooks always win on conflicts. |
+| **Host VS Code isolation** | Settings sync blocked; Copilot blocked; extension versions pinned. |
+
+Earlier image versions also tried to block `.env` / `*.key` file reads, system-path writes, `sudo`, and access to `~/.gnupg` / `~/.kube` / `~/.claude/` etc. Those were removed: in container isolation they protected against threats that don't exist (host creds aren't reachable; project files are intentionally visible) while creating friction for normal Claude Code operations (`Update plan` writes to `~/.claude/`, projects often have legitimate `.env` files). The remote-publishing block is the one that actually matters — it's the only operation that escapes the sandbox.
 
 ## Prerequisites
 

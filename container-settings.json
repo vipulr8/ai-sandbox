@@ -7,15 +7,11 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Read|Bash|Edit|Write|Grep|Glob",
+        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "/opt/ai-sandbox/hooks/block-credentials.sh"
-          },
-          {
-            "type": "command",
-            "command": "/opt/ai-sandbox/hooks/block-sensitive-paths.sh"
+            "command": "/opt/ai-sandbox/hooks/block-remote-publishing.sh"
           }
         ]
       }

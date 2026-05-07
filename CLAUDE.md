@@ -64,12 +64,12 @@ The right operand wins in jq's `*` merge — so **container values always overri
 
 Two unrelated systems both live under `container-hooks/` and shouldn't be conflated:
 
-1. **Claude Code `PreToolUse` hooks** (`block-credentials.sh`, `block-sensitive-paths.sh`) — invoked by the Claude CLI itself on every `Read|Bash|Edit|Write|Grep|Glob` tool call. They read JSON from stdin (`tool_name`, `tool_input.file_path`/`tool_input.command`) and emit a JSON `permissionDecision: "deny"` to block. They enforce the credential-file blocklist, system-path write block, `sudo`-block, `git push`-block, and `gh pr create`-block.
+1. **Claude Code `PreToolUse` hook** (`block-remote-publishing.sh`) — invoked by the Claude CLI on every `Bash` tool call. Reads JSON from stdin, emits a JSON `permissionDecision: "deny"` for any command starting with `git push`, `git remote add|set-url`, or the GitHub-publishing `gh` subcommands (`pr create|merge|comment`, `issue create|comment`, `release create`, `repo create|delete`). Other tool calls and other Bash commands are passed through.
 2. **Global git hooks** (`container-hooks/git/pre-commit`, `commit-msg`) — wired up at image build via `git config --system core.hooksPath /opt/ai-sandbox/git-hooks`. `pre-commit` runs `gitleaks protect --staged`; `commit-msg` strips Claude/Anthropic `Co-Authored-By` and "Generated with Claude" lines from commit messages.
 
-The git-push and `gh` blocks live in the Claude `PreToolUse` hook, not in git hooks — they only block the AI, not the human user running git directly inside the container.
+**The PreToolUse hook only blocks the AI**, not the human user running `git push` directly inside the container — and that's by design (the human can publish; the AI can't).
 
-`block-credentials.sh` matches its blocklist with bash `case *"$pattern"*` — that's **substring** match, not glob. So `.env` matches `.environment.txt`, `*.key` matches `monkey.txt`, etc. This is intentionally over-broad (fail-closed) and the `.env.*` / `secrets/` / `.aws/` entries rely on substring semantics to work at all. Don't "fix" it by switching to glob matching without rewriting the entries — you'd silently un-block real credential paths.
+**Why so minimal?** Earlier versions of the hooks also blocked file patterns (`.env`, `*.pem`, `*.key`, `credentials.json`, etc.), credential paths (`~/.gnupg`, `~/.kube`, `~/.aws/`, `~/.claude/` itself, etc.), and system-path writes. All of those were removed because the container is otherwise an isolated sandbox: host secrets aren't reachable (not mounted), the project files are *intentionally* visible, and Claude Code legitimately writes to `~/.claude/` for plans/memory/sessions. The blocklists were creating friction (broke `Update plan`, prevented commits whose messages mentioned `.env`, etc.) without protecting against threats that exist in this environment. Remote-publishing is the only operation that actually escapes the sandbox, so it's the only one still blocked.
 
 ### Entrypoint responsibilities
 
