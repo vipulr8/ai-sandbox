@@ -3,7 +3,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IMAGE_BASE="ai-sandbox"
-REGISTRY_BASE="ghcr.io/vipulr8/ai-sandbox"
 
 # ── Load .env if present (git-ignored, never committed) ──────────
 if [ -f "$SCRIPT_DIR/.env" ]; then
@@ -16,7 +15,6 @@ fi
 PROJECT_PATH=""
 LAUNCH_CLAUDE=false
 BUILD_ONLY=false
-PULL=false
 CLAUDE_VERSION="latest"
 CLAUDE_DIR=""
 
@@ -32,15 +30,12 @@ Options:
   --claude-dir <path>         Mount a host directory as Claude config (~/.claude inside container)
   --claude-version <version>  Use a specific Claude Code version (default: latest)
   --build                     Build or rebuild the Docker image locally
-  --pull                      Pull the prebuilt image from ${REGISTRY_BASE}
   --help                      Show this help
 
 Environment variables:
   DOCKER_SOCKET               Set to 1 to mount Docker socket into container
 
 Examples:
-  ./run.sh --pull                                   # fetch latest prebuilt image
-  ./run.sh ~/myproject --pull --claude              # pull + run
   ./run.sh ~/myproject --claude --claude-dir ~/.ai-sandbox-api
   ./run.sh ~/myproject --claude --claude-dir ~/.ai-sandbox/auth
   ./run.sh ~/myproject --claude --claude-dir ~/.ai-sandbox-api --claude-version 2.1.98
@@ -69,10 +64,6 @@ while [[ $# -gt 0 ]]; do
             BUILD_ONLY=true
             shift
             ;;
-        --pull)
-            PULL=true
-            shift
-            ;;
         --help|-h)
             show_help
             exit 0
@@ -96,7 +87,6 @@ else
     IMAGE_TAG="cc-${CLAUDE_VERSION}"
 fi
 IMAGE="${IMAGE_BASE}:${IMAGE_TAG}"
-REGISTRY_IMAGE="${REGISTRY_BASE}:${IMAGE_TAG}"
 
 # ── Detect Docker socket (Colima-aware) ───────────────────────────
 detect_docker_sock() {
@@ -123,22 +113,8 @@ build_image() {
     echo "Built ${IMAGE} successfully."
 }
 
-# ── Pull ──────────────────────────────────────────────────────────
-pull_image() {
-    echo "Pulling ${REGISTRY_IMAGE}..."
-    docker pull "${REGISTRY_IMAGE}"
-    docker tag "${REGISTRY_IMAGE}" "${IMAGE}"
-    echo "Tagged ${REGISTRY_IMAGE} as ${IMAGE}."
-}
-
 if [ "$BUILD_ONLY" = true ]; then
     build_image
-    exit 0
-fi
-
-# Standalone --pull (no project path): pull and exit.
-if [ "$PULL" = true ] && [ -z "$PROJECT_PATH" ]; then
-    pull_image
     exit 0
 fi
 
@@ -157,9 +133,7 @@ fi
 PROJECT_PATH="$(cd "$PROJECT_PATH" && pwd)"
 
 # ── Acquire image ─────────────────────────────────────────────────
-if [ "$PULL" = true ]; then
-    pull_image
-elif ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
+if ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
     echo "Image ${IMAGE} not found, building..."
     build_image
 fi

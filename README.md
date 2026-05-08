@@ -20,18 +20,18 @@ Base image: Ubuntu 24.04 LTS. Runs as non-root user `coder` with passwordless su
 
 ## Security
 
+The container itself is the primary isolation boundary — host secrets (SSH keys, GPG keys, AWS / kube credentials, etc.) aren't visible inside unless you mount them. On top of that, the image adds:
+
 | Control | How |
 |---------|-----|
-| **Filesystem isolation** | Only the mounted project directory is accessible |
-| **Gitleaks pre-commit** | Scans every commit for secrets automatically |
-| **Commit message scrubbing** | AI attribution lines stripped from commits |
-| **AI git push blocked** | Claude cannot push (local commits only); users retain full git access |
-| **AI GitHub publishing blocked** | `gh pr create`, `gh issue create`, etc. denied for Claude |
-| **Credential file access blocked** | `.env`, `.pem`, `.key`, `credentials.json`, etc. |
-| **System path writes blocked** | `/etc`, `/usr/bin`, `/usr/sbin` read-only to Claude |
-| **Sudo blocked** | Claude cannot escalate privileges |
-| **Settings merge** | User settings merged with container hooks; hooks cannot be overridden |
-| **Host VS Code isolation** | Settings sync blocked; Copilot blocked; extension versions pinned |
+| **AI git push blocked** | PreToolUse hook denies any `git push` / `git remote add|set-url` Bash command from Claude. Users running `git push` themselves inside the container are unaffected. |
+| **AI GitHub publishing blocked** | Same hook denies `gh pr create|merge|comment`, `gh issue create|comment`, `gh release create`, `gh repo create|delete` from Claude. |
+| **Gitleaks pre-commit** | Wired up at build via `git config --system core.hooksPath`. Scans every commit for secrets automatically. |
+| **Commit message scrubbing** | `commit-msg` git hook strips Claude/Anthropic `Co-Authored-By` and "Generated with Claude" lines. |
+| **Settings merge** | User-supplied `settings.json` is merged with container hooks via `jq -s '.[0] * .[1]'` so the container hooks always win on conflicts. |
+| **Host VS Code isolation** | Settings sync blocked; Copilot blocked; extension versions pinned. |
+
+Earlier image versions also tried to block `.env` / `*.key` file reads, system-path writes, `sudo`, and access to `~/.gnupg` / `~/.kube` / `~/.claude/` etc. Those were removed: in container isolation they protected against threats that don't exist (host creds aren't reachable; project files are intentionally visible) while creating friction for normal Claude Code operations (`Update plan` writes to `~/.claude/`, projects often have legitimate `.env` files). The remote-publishing block is the one that actually matters — it's the only operation that escapes the sandbox.
 
 ## Prerequisites
 
@@ -43,21 +43,14 @@ Base image: Ubuntu 24.04 LTS. Runs as non-root user `coder` with passwordless su
 ## Quick start
 
 ```bash
-# Option A: pull the prebuilt image from GHCR (fastest, no build needed)
-./run.sh --pull
-./run.sh ~/myproject --claude --claude-dir ~/.my-claude-config
-
-# Option B: build locally
+# Build the image (one-time, ~5–10 min)
 ./run.sh --build
+
+# Run against a project
 ./run.sh ~/myproject --claude --claude-dir ~/.my-claude-config
 ```
 
-### Pulling vs building
-
-- **`--pull`** fetches the image from `ghcr.io/vipulr8/ai-sandbox` and tags it locally as `ai-sandbox:<tag>`. CI builds it multi-arch (amd64/arm64) on every push to main, weekly, and on `cc-*` / `v*` tags.
-- **`--build`** builds from source against the current working tree. Use this when you've edited the `Dockerfile`, `entrypoint.sh`, `container-hooks/`, or `container-settings.json`.
-
-You can mix: pull a baseline, edit something locally, then `--build` to override.
+`--build` builds from source against the current working tree. Re-run it whenever you've edited the `Dockerfile`, `entrypoint.sh`, `container-hooks/`, or `container-settings.json`. There is no published image — local build is the only path.
 
 ## Authentication
 
@@ -128,7 +121,6 @@ rm -rf ~/.ai-sandbox/auth
 | `--claude-dir <path>` | Mount a host directory as Claude config (`~/.claude` inside container) |
 | `--claude-version <version>` | Use a specific Claude Code version (default: latest) |
 | `--build` | Build or rebuild the Docker image locally |
-| `--pull` | Pull the prebuilt image from `ghcr.io/vipulr8/ai-sandbox` |
 | `--help` | Show help |
 
 ### dev.sh
@@ -143,7 +135,6 @@ Starts the container in the background and opens VS Code attached to it. Open a 
 |------|-------------|
 | `--claude-dir <path>` | Mount a host directory as Claude config |
 | `--claude-version <version>` | Use a specific Claude Code version (default: latest) |
-| `--pull` | Pull the prebuilt image from `ghcr.io/vipulr8/ai-sandbox` |
 | `--stop <project-path>` | Stop the container for a specific project |
 | `--stop-all` | Stop all ai-sandbox containers |
 | `--list` | List running ai-sandbox instances |
@@ -180,6 +171,14 @@ When using `dev.sh`, VS Code runs attached to the container with:
 - **Extension auto-update disabled**
 
 Extensions installed in the container: Python, debugpy, Ruff, Terraform, YAML, JSON, GitLens, Claude Code.
+
+The first 7 are **baked into the image** at build time (single source of truth: `vscode-extensions.txt`) so they're present the moment the container starts. The Claude Code extension is installed **post-attach** by `dev.sh` (`docker exec -d ... code-server --install-extension --force`) so its install hook fires inside VS Code Server's running context — that path initializes the extension's auth state from your `settings.json` env block, which the bake-time install path skips. Watch the install with:
+
+```bash
+docker exec ai-sandbox-<project> cat /tmp/install-claude-ext.log
+```
+
+Pinned versions of the Claude extension are honored: `--claude-version 2.1.98` installs `anthropic.claude-code@2.1.98`.
 
 > **Important:** After changing the Dockerfile or entrypoint, rebuild all image versions you use:
 > ```bash
@@ -241,8 +240,8 @@ The script auto-detects socket paths for Colima, `DOCKER_HOST`, and the standard
 For more structured usage:
 
 ```bash
-# Pull the prebuilt image
-docker compose pull
+# Build the image (first run)
+docker compose build
 
 # Shell
 PROJECT_DIR=~/myproject docker compose run --rm claude
@@ -254,9 +253,8 @@ PROJECT_DIR=~/myproject docker compose --profile interactive run --rm claude-int
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PROJECT_DIR` | `.` | Project directory to mount |
-| `IMAGE` | `ghcr.io/vipulr8/ai-sandbox:${CLAUDE_VERSION_TAG:-latest}` | Image to run; override for purely local builds (e.g. `ai-sandbox:latest`) |
-| `CLAUDE_VERSION_TAG` | `latest` | Tag suffix used in the default image name |
-| `CLAUDE_VERSION` | `latest` | Claude Code version for build (only relevant when building locally) |
+| `CLAUDE_VERSION_TAG` | `latest` | Tag suffix used in the image name (`ai-sandbox:<tag>`) |
+| `CLAUDE_VERSION` | `latest` | Claude Code version baked in at build time |
 | `USER_UID` | `1000` | Container user UID (build-time only; runtime is hardcoded to 1000) |
 | `USER_GID` | `1000` | Container user GID (build-time only; runtime is hardcoded to 1000) |
 

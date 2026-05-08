@@ -3,7 +3,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IMAGE_BASE="ai-sandbox"
-REGISTRY_BASE="ghcr.io/vipulr8/ai-sandbox"
 CONTAINER_PREFIX="ai-sandbox"
 
 # ── Load .env if present ─────────────────────────────────────────
@@ -37,7 +36,6 @@ list_instances() {
 PROJECT_PATH=""
 CLAUDE_VERSION="latest"
 CLAUDE_DIR=""
-PULL=false
 
 show_help() {
     cat <<EOF
@@ -49,14 +47,12 @@ Usage:
 Options:
   --claude-dir <path>         Mount a host directory as Claude config
   --claude-version <version>  Claude Code version (default: latest)
-  --pull                      Pull the prebuilt image from ${REGISTRY_BASE}
   --stop <project-path>       Stop the container for a specific project
   --stop-all                  Stop all ai-sandbox containers
   --list                      List running ai-sandbox instances
   --help                      Show this help
 
 Examples:
-  ./dev.sh ~/myproject --pull
   ./dev.sh ~/myproject --claude-dir ~/.ai-sandbox-api --claude-version 2.1.98
   ./dev.sh ~/myproject --claude-dir ~/.ai-sandbox/auth
   ./dev.sh ~/myproject
@@ -77,10 +73,6 @@ while [[ $# -gt 0 ]]; do
             CLAUDE_VERSION="${2:-}"
             if [ -z "$CLAUDE_VERSION" ]; then echo "Error: --claude-version requires a version"; exit 1; fi
             shift 2
-            ;;
-        --pull)
-            PULL=true
-            shift
             ;;
         --stop)
             if [ -z "${2:-}" ] || [[ "$2" == --* ]]; then
@@ -159,15 +151,9 @@ else
     IMAGE_TAG="cc-${CLAUDE_VERSION}"
 fi
 IMAGE="${IMAGE_BASE}:${IMAGE_TAG}"
-REGISTRY_IMAGE="${REGISTRY_BASE}:${IMAGE_TAG}"
 
 # ── Acquire image ─────────────────────────────────────────────────
-if [ "$PULL" = true ]; then
-    echo "Pulling ${REGISTRY_IMAGE}..."
-    docker pull "${REGISTRY_IMAGE}"
-    docker tag "${REGISTRY_IMAGE}" "${IMAGE}"
-    echo "Tagged ${REGISTRY_IMAGE} as ${IMAGE}."
-elif ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
+if ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
     echo "Image ${IMAGE} not found, building..."
     docker build \
         --build-arg "CLAUDE_VERSION=${CLAUDE_VERSION}" \
@@ -220,6 +206,40 @@ echo "Opening VS Code..."
 code --folder-uri "${VSCODE_URI}" 2>/dev/null || {
     echo "Warning: 'code' CLI not found. Attach manually in VS Code."
 }
+
+# ── Install Claude extension post-attach ──────────────────────────
+# The 7 non-Claude extensions are baked into the image (see vscode-extensions.txt).
+# Anthropic's extension is intentionally NOT baked: bake-time install skips the
+# extension's install hook, leaving API-mode auth state uninitialized. Installing
+# via VS Code's own code-server post-attach re-fires the hook and initializes
+# auth from settings.json's env block.
+if [ "$CLAUDE_VERSION" = "latest" ]; then
+    CLAUDE_EXT="anthropic.claude-code"
+else
+    CLAUDE_EXT="anthropic.claude-code@${CLAUDE_VERSION}"
+fi
+
+# `docker exec -d` runs detached (returns immediately). The bash -c body uses
+# escaped \$ for variables that should be evaluated when each loop iteration
+# runs — NOT at script-write time.
+docker exec -d "${CONTAINER_NAME}" bash -c "
+LOG=/tmp/install-claude-ext.log
+: > \"\$LOG\"
+echo \"[\$(date +%T)] Polling for VS Code Server's code-server (up to 120s)\" >> \"\$LOG\"
+for attempt in \$(seq 1 24); do
+    CLI=\$(ls ~/.vscode-server/bin/*/bin/code-server 2>/dev/null | head -1)
+    if [ -n \"\$CLI\" ]; then
+        echo \"[\$(date +%T)] Installing ${CLAUDE_EXT} via \$CLI\" >> \"\$LOG\"
+        \"\$CLI\" --install-extension ${CLAUDE_EXT} --force >> \"\$LOG\" 2>&1
+        echo \"[\$(date +%T)] Done (exit \$?).\" >> \"\$LOG\"
+        exit 0
+    fi
+    sleep 5
+done
+echo \"[\$(date +%T)] Gave up after 120s — VS Code Server's code-server never appeared.\" >> \"\$LOG\"
+exit 1
+"
+echo "Claude extension install scheduled (post-attach). Logs: docker exec ${CONTAINER_NAME} cat /tmp/install-claude-ext.log"
 
 # ── Done ──────────────────────────────────────────────────────────
 echo ""
