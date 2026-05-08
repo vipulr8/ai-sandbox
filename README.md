@@ -43,21 +43,14 @@ Earlier image versions also tried to block `.env` / `*.key` file reads, system-p
 ## Quick start
 
 ```bash
-# Option A: pull the prebuilt image from GHCR (fastest, no build needed)
-./run.sh --pull
-./run.sh ~/myproject --claude --claude-dir ~/.my-claude-config
-
-# Option B: build locally
+# Build the image (one-time, ~5–10 min)
 ./run.sh --build
+
+# Run against a project
 ./run.sh ~/myproject --claude --claude-dir ~/.my-claude-config
 ```
 
-### Pulling vs building
-
-- **`--pull`** fetches the image from `ghcr.io/vipulr8/ai-sandbox` and tags it locally as `ai-sandbox:<tag>`. CI builds it multi-arch (amd64/arm64) on every push to main, weekly, and on `cc-*` / `v*` tags.
-- **`--build`** builds from source against the current working tree. Use this when you've edited the `Dockerfile`, `entrypoint.sh`, `container-hooks/`, or `container-settings.json`.
-
-You can mix: pull a baseline, edit something locally, then `--build` to override.
+`--build` builds from source against the current working tree. Re-run it whenever you've edited the `Dockerfile`, `entrypoint.sh`, `container-hooks/`, or `container-settings.json`. There is no published image — local build is the only path.
 
 ## Authentication
 
@@ -128,7 +121,6 @@ rm -rf ~/.ai-sandbox/auth
 | `--claude-dir <path>` | Mount a host directory as Claude config (`~/.claude` inside container) |
 | `--claude-version <version>` | Use a specific Claude Code version (default: latest) |
 | `--build` | Build or rebuild the Docker image locally |
-| `--pull` | Pull the prebuilt image from `ghcr.io/vipulr8/ai-sandbox` |
 | `--help` | Show help |
 
 ### dev.sh
@@ -143,7 +135,6 @@ Starts the container in the background and opens VS Code attached to it. Open a 
 |------|-------------|
 | `--claude-dir <path>` | Mount a host directory as Claude config |
 | `--claude-version <version>` | Use a specific Claude Code version (default: latest) |
-| `--pull` | Pull the prebuilt image from `ghcr.io/vipulr8/ai-sandbox` |
 | `--stop <project-path>` | Stop the container for a specific project |
 | `--stop-all` | Stop all ai-sandbox containers |
 | `--list` | List running ai-sandbox instances |
@@ -249,8 +240,8 @@ The script auto-detects socket paths for Colima, `DOCKER_HOST`, and the standard
 For more structured usage:
 
 ```bash
-# Pull the prebuilt image
-docker compose pull
+# Build the image (first run)
+docker compose build
 
 # Shell
 PROJECT_DIR=~/myproject docker compose run --rm claude
@@ -262,9 +253,8 @@ PROJECT_DIR=~/myproject docker compose --profile interactive run --rm claude-int
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PROJECT_DIR` | `.` | Project directory to mount |
-| `IMAGE` | `ghcr.io/vipulr8/ai-sandbox:${CLAUDE_VERSION_TAG:-latest}` | Image to run; override for purely local builds (e.g. `ai-sandbox:latest`) |
-| `CLAUDE_VERSION_TAG` | `latest` | Tag suffix used in the default image name |
-| `CLAUDE_VERSION` | `latest` | Claude Code version for build (only relevant when building locally) |
+| `CLAUDE_VERSION_TAG` | `latest` | Tag suffix used in the image name (`ai-sandbox:<tag>`) |
+| `CLAUDE_VERSION` | `latest` | Claude Code version baked in at build time |
 | `USER_UID` | `1000` | Container user UID (build-time only; runtime is hardcoded to 1000) |
 | `USER_GID` | `1000` | Container user GID (build-time only; runtime is hardcoded to 1000) |
 

@@ -24,7 +24,7 @@ shellcheck run.sh dev.sh entrypoint.sh container-hooks/*.sh container-hooks/git/
 
 After **any** edit to `Dockerfile`, `entrypoint.sh`, `container-settings.json`, or `container-hooks/`, the image must be rebuilt — running containers and existing tags do not pick up changes. If multiple `--claude-version` tags are in use, rebuild each one (`./run.sh --build && ./run.sh --build --claude-version <X>`).
 
-There is no test suite and no package manifest. CI lives in `.github/workflows/publish.yml` — it builds the image multi-arch (amd64/arm64) and pushes to `ghcr.io/vipulr8/ai-sandbox` on pushes to `main`, on `cc-*`/`v*` tags, on a weekly schedule, and on `workflow_dispatch`. End users can either pull from GHCR (`./run.sh --pull` / `./dev.sh --pull`) or build locally (`./run.sh --build`).
+There is no test suite, no package manifest, and no CI. The image is built locally via `./run.sh --build` (or `./run.sh --build --claude-version <X>` for a pinned tag). There is no published registry image — every user builds from source.
 
 **Scope: macOS hosts only.** The image bakes UID 1000 at build time and there is no runtime UID adaptation. Docker Desktop and Colima translate UIDs across the bind-mount boundary on macOS, so this is invisible there. On Linux hosts with UID ≠ 1000, bind-mounted files would end up owned by 1000 — that case is intentionally out of scope.
 
@@ -94,7 +94,7 @@ PID 1 runs `entrypoint.sh` directly as the `coder` user — the Dockerfile's fin
 
 ## Conventions worth knowing
 
-- The container user `coder` is hardcoded to UID/GID 1000 at image build time. There is no runtime adaptation. For local builds, `run.sh` and `dev.sh` still pass `--build-arg USER_UID=$(id -u)` so the locally-built image matches the host user. The registry image (built in CI) is always 1000. macOS Docker Desktop / Colima translate UIDs across the bind-mount boundary, which is why this is fine on the supported platform.
+- The container user `coder` is hardcoded to UID/GID 1000 at image build time. There is no runtime adaptation. `run.sh` and `dev.sh` pass `--build-arg USER_UID=$(id -u)` so the locally-built image matches the host user. macOS Docker Desktop / Colima translate UIDs across the bind-mount boundary, which is why this is fine on the supported platform.
 - `.env` next to the launcher scripts is auto-sourced by both `run.sh` and `dev.sh` (`set -a; source .env; set +a`). It is git-ignored — use it for `ANTHROPIC_MODEL`, `DOCKER_SOCKET`, etc.
 - The Dockerfile is organized into numbered "Layer N" comment blocks. Reordering them changes Docker's build cache invalidation behavior; keep slow/stable layers (apt, Go, Rust, Node) above fast-changing ones (Claude CLI install, hooks copy).
 - Auto-update is disabled inside the image (`DISABLE_AUTOUPDATER=1` env, `extensions.autoUpdate: false` for VS Code). To upgrade Claude Code, rebuild with a new `--claude-version`. Don't add update logic to the running container.

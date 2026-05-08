@@ -3,7 +3,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IMAGE_BASE="ai-sandbox"
-REGISTRY_BASE="ghcr.io/vipulr8/ai-sandbox"
 CONTAINER_PREFIX="ai-sandbox"
 
 # ── Load .env if present ─────────────────────────────────────────
@@ -37,7 +36,6 @@ list_instances() {
 PROJECT_PATH=""
 CLAUDE_VERSION="latest"
 CLAUDE_DIR=""
-PULL=false
 
 show_help() {
     cat <<EOF
@@ -49,14 +47,12 @@ Usage:
 Options:
   --claude-dir <path>         Mount a host directory as Claude config
   --claude-version <version>  Claude Code version (default: latest)
-  --pull                      Pull the prebuilt image from ${REGISTRY_BASE}
   --stop <project-path>       Stop the container for a specific project
   --stop-all                  Stop all ai-sandbox containers
   --list                      List running ai-sandbox instances
   --help                      Show this help
 
 Examples:
-  ./dev.sh ~/myproject --pull
   ./dev.sh ~/myproject --claude-dir ~/.ai-sandbox-api --claude-version 2.1.98
   ./dev.sh ~/myproject --claude-dir ~/.ai-sandbox/auth
   ./dev.sh ~/myproject
@@ -77,10 +73,6 @@ while [[ $# -gt 0 ]]; do
             CLAUDE_VERSION="${2:-}"
             if [ -z "$CLAUDE_VERSION" ]; then echo "Error: --claude-version requires a version"; exit 1; fi
             shift 2
-            ;;
-        --pull)
-            PULL=true
-            shift
             ;;
         --stop)
             if [ -z "${2:-}" ] || [[ "$2" == --* ]]; then
@@ -159,15 +151,9 @@ else
     IMAGE_TAG="cc-${CLAUDE_VERSION}"
 fi
 IMAGE="${IMAGE_BASE}:${IMAGE_TAG}"
-REGISTRY_IMAGE="${REGISTRY_BASE}:${IMAGE_TAG}"
 
 # ── Acquire image ─────────────────────────────────────────────────
-if [ "$PULL" = true ]; then
-    echo "Pulling ${REGISTRY_IMAGE}..."
-    docker pull "${REGISTRY_IMAGE}"
-    docker tag "${REGISTRY_IMAGE}" "${IMAGE}"
-    echo "Tagged ${REGISTRY_IMAGE} as ${IMAGE}."
-elif ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
+if ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
     echo "Image ${IMAGE} not found, building..."
     docker build \
         --build-arg "CLAUDE_VERSION=${CLAUDE_VERSION}" \
