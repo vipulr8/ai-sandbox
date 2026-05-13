@@ -26,7 +26,9 @@ After **any** edit to `Dockerfile`, `entrypoint.sh`, `container-settings.json`, 
 
 There is no test suite, no package manifest, and no CI. The image is built locally via `./run.sh --build` (or `./run.sh --build --claude-version <X>` for a pinned tag). There is no published registry image — every user builds from source.
 
-**Scope: macOS hosts only.** The image bakes UID 1000 at build time and there is no runtime UID adaptation. Docker Desktop and Colima translate UIDs across the bind-mount boundary on macOS, so this is invisible there. On Linux hosts with UID ≠ 1000, bind-mounted files would end up owned by 1000 — that case is intentionally out of scope.
+**Scope: macOS, Linux, and Windows (via WSL2).** The container user `coder` is created at build time with UID/GID matching the host user, via `--build-arg USER_UID=$(id -u)` in `run.sh` and `dev.sh`. This means bind-mounts behave correctly regardless of host UID on any Unix-like host. macOS Docker Desktop / Colima additionally do user-namespace remapping (so a Mac would still work even if someone baked a foreign UID into the image), but the build-arg approach is the primary mechanism — and it's what makes Linux and WSL2 work too, with no extra magic. Native Windows (PowerShell launchers, no WSL2) is explicitly out of scope; Windows users go through WSL2.
+
+**WSL2 note:** project paths and the ai-sandbox repo itself should live inside the WSL filesystem (e.g., `/home/user/code/proj`), not under Windows-mounted paths like `/mnt/c/...`. The latter has slow filesystem performance and inconsistent bind-mount UID semantics across the Windows/WSL boundary.
 
 ## Architecture
 
@@ -108,7 +110,7 @@ The entrypoint does **not** read, merge, or write any user-owned `settings.json`
 
 ## Conventions worth knowing
 
-- The container user `coder` is hardcoded to UID/GID 1000 at image build time. There is no runtime adaptation. `run.sh` and `dev.sh` pass `--build-arg USER_UID=$(id -u)` so the locally-built image matches the host user. macOS Docker Desktop / Colima translate UIDs across the bind-mount boundary, which is why this is fine on the supported platform.
+- The container user `coder` is created at build time with UID/GID matching the host user via `--build-arg USER_UID=$(id -u)` passed by `run.sh` and `dev.sh`. There is no runtime UID adaptation; if you pull a prebuilt image (we don't distribute any) instead of building locally, you'd see UID-ownership mismatches on Linux/WSL2 where the macOS user-namespace-remap trick doesn't paper over them.
 - `.env` next to the launcher scripts is auto-sourced by both `run.sh` and `dev.sh` (`set -a; source .env; set +a`). It is git-ignored — use it for `ANTHROPIC_MODEL`, `DOCKER_SOCKET`, etc.
 - The Dockerfile is organized into numbered "Layer N" comment blocks. Reordering them changes Docker's build cache invalidation behavior; keep slow/stable layers (apt, Go, Rust, Node) above fast-changing ones (Claude CLI install, hooks copy).
 - Auto-update is disabled inside the image (`DISABLE_AUTOUPDATER=1` env, `extensions.autoUpdate: false` for VS Code). To upgrade Claude Code, rebuild with a new `--claude-version`. Don't add update logic to the running container.
