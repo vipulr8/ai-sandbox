@@ -13,7 +13,7 @@ The work lands on a feature branch (`feat/linux-wsl2-support`) and does **not me
 
 - **Native Windows support (PowerShell launchers).** Out of scope. Windows users get supported via WSL2, which IS Linux from Docker's perspective. Native-Windows-no-WSL would require rewriting `run.sh`/`dev.sh` in PowerShell and is a separate, larger project.
 - **Distributable prebuilt images with arbitrary-UID support.** The image is still locally-built; `--build-arg USER_UID=$(id -u)` makes the container user match the host user. Linux hosts that build locally inherit this. Pulling a prebuilt image and using it as a different host UID is explicitly out of scope (matches the existing macOS-only policy on this question).
-- **Rootless Docker, Podman, or other container runtimes.** Standard Docker (Engine on Linux, Desktop on Mac/Windows) is the target.
+- **Rootless Docker, Podman, or other container runtimes.** Standard Docker Engine (on Linux and inside WSL2) and Colima or Docker Desktop (on macOS) are the targets. Podman would likely work since the launchers only use generic Docker CLI commands, but it's not verified and not part of the runbook.
 - **CI for cross-platform.** No automated test matrix; verification is human-driven via the runbook in this spec.
 - **`docker-compose.yml` cross-platform polish.** Compose works fine on Linux/WSL2 already; not in scope here.
 
@@ -26,17 +26,18 @@ Three categories of change, each modest.
 Remove the "macOS only" framing wherever it appears and replace it with a multi-platform support matrix. New setup pages for Linux and Windows + WSL2 parallel the existing Colima page.
 
 **`README.md`:**
-- Replace the "Supported platform: macOS only" callout (around line 5) with a support matrix:
+- Replace the "Supported platform: macOS only" callout (around line 5) with a support matrix that names the **OSS-friendly runtime** as the primary option on each host:
   ```
-  | Host OS | Status | Setup |
-  |---------|--------|-------|
-  | macOS   | ✓ verified | Colima or Docker Desktop |
-  | Linux   | ✓ verified | Docker Engine |
-  | Windows | ✓ via WSL2 | WSL2 + Docker Desktop |
+  | Host OS | Status | Recommended runtime (OSS) | Alternative |
+  |---------|--------|---------------------------|-------------|
+  | macOS   | ✓ verified | Colima | Docker Desktop |
+  | Linux   | ✓ verified | Docker Engine | Docker Desktop |
+  | Windows | ✓ via WSL2 | Docker Engine inside WSL2 | Docker Desktop (WSL2 backend) |
   ```
+  The matrix lists the open-source runtime first on every host to match the project's existing posture (Colima leads on macOS already). Docker Desktop is the second column on every row because it carries a commercial-use license for orgs >250 employees or >$10M revenue, which is friction the OSS path avoids.
 - Generalize "Prerequisites" to enumerate per-platform install steps. Keep the Colima section under a "macOS setup" heading. Add parallel "Linux setup" and "Windows + WSL2 setup" sections after it.
-- The Linux setup page covers: install Docker Engine via the official Debian/Ubuntu/Fedora instructions, ensure user is in the `docker` group (or use `sudo`), no UID workarounds needed because `--build-arg USER_UID=$(id -u)` does it.
-- The Windows + WSL2 setup page covers: install WSL2 (`wsl --install`); install a Linux distro (Ubuntu is default); install Docker Desktop with the WSL2 backend enabled; install the VS Code **WSL** extension; **clone the ai-sandbox repo INSIDE the WSL filesystem** (e.g., `~/code/ai-sandbox`, not `/mnt/c/...`) for performance and bind-mount reliability; from then on, follow the Linux instructions inside the WSL2 shell.
+- **Linux setup page (OSS path primary):** install Docker Engine via the official Docker repos for the user's distro (Debian/Ubuntu: `https://docs.docker.com/engine/install/ubuntu/`; Fedora: `.../install/fedora/`; etc.). Add the user to the `docker` group (`sudo usermod -aG docker $USER` + new shell). Verify with `docker run hello-world`. No UID workarounds needed — `--build-arg USER_UID=$(id -u)` handles it. A short "or use Docker Desktop" note at the end of the section, with the same commercial-license disclaimer.
+- **Windows + WSL2 setup page (OSS path primary):** install WSL2 with `wsl --install` from an elevated PowerShell; install a Linux distro (Ubuntu default). Inside the WSL2 shell, install **Docker Engine** the same way as on bare Linux. Start the daemon (`sudo service docker start`, or use systemd-in-WSL2 which is default in modern WSL versions). Install the VS Code **WSL** extension on Windows. **Clone the ai-sandbox repo INSIDE the WSL filesystem** (e.g., `~/code/ai-sandbox`, NOT `/mnt/c/...`) for performance and bind-mount UID consistency. From there, follow the Linux setup steps. A short "or use Docker Desktop with WSL2 backend" alternative note at the end, again flagging the commercial-license consideration.
 
 **`CLAUDE.md`:**
 - Rewrite the "Scope: macOS hosts only" paragraph (line 29). New text describes how `--build-arg USER_UID=$(id -u)` solves the host/container UID matching problem on any Unix-like host, not just macOS — so Linux works by the same mechanism, and WSL2 inherits it because WSL2 is Linux. Note the macOS-specific bonus that Docker Desktop / Colima additionally do user-namespace remapping (which is what makes Mac work even if someone bakes a foreign UID into the image), but the build-arg approach is the primary mechanism that makes all three hosts work today.
