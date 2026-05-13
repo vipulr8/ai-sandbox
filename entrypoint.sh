@@ -1,6 +1,13 @@
 #!/bin/bash
 set -e
 
+# ── 1. Claude state symlink ───────────────────────────────────────
+# Claude Code expects ~/.claude.json at the home root, but only
+# ~/.claude/ is bind-mounted to the host. Symlinking the home-root
+# file into the bind-mount makes every read/write persist directly,
+# replacing the previous periodic-backup-and-restore mechanism.
+ln -sf "$HOME/.claude/.claude.json" "$HOME/.claude.json"
+
 # ── 2. Docker socket permissions ──────────────────────────────────
 if [ -S /var/run/docker.sock ]; then
     DOCKER_GID=$(stat -c '%g' /var/run/docker.sock)
