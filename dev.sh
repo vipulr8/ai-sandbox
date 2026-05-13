@@ -169,6 +169,7 @@ DOCKER_SOCK_ARGS=()
 if [ "${DOCKER_SOCKET:-0}" = "1" ]; then
     if [ -n "${DOCKER_HOST:-}" ]; then
         DOCKER_SOCK_ARGS=(-v "${DOCKER_HOST#unix://}:/var/run/docker.sock")
+    # macOS Colima fallback (no-op on Linux/WSL2 — the path doesn't exist)
     elif [ -S "$HOME/.colima/default/docker.sock" ]; then
         DOCKER_SOCK_ARGS=(-v "$HOME/.colima/default/docker.sock:/var/run/docker.sock")
     elif [ -S /var/run/docker.sock ]; then

@@ -93,6 +93,7 @@ IMAGE="${IMAGE_BASE}:${IMAGE_TAG}"
 detect_docker_sock() {
     if [ -n "${DOCKER_HOST:-}" ]; then
         echo "${DOCKER_HOST#unix://}"
+    # macOS Colima fallback (no-op on Linux/WSL2 — the path doesn't exist)
     elif [ -S "$HOME/.colima/default/docker.sock" ]; then
         echo "$HOME/.colima/default/docker.sock"
     elif [ -S /var/run/docker.sock ]; then
