@@ -45,7 +45,8 @@ Usage:
   ./dev.sh <project-path> [options]
 
 Options:
-  --claude-dir <path>         Mount a host directory as Claude config
+  --claude-dir <path>         Host directory mounted as ~/.claude in the container.
+                              Defaults to ~/.ai-sandbox/<project-basename>/ (persistence on by default).
   --claude-version <version>  Claude Code version (default: latest)
   --stop <project-path>       Stop the container for a specific project
   --stop-all                  Stop all ai-sandbox containers
@@ -176,12 +177,15 @@ if [ "${DOCKER_SOCKET:-0}" = "1" ]; then
 fi
 
 # ── Claude config directory mount ─────────────────────────────────
-CLAUDE_DIR_ARGS=()
-if [ -n "$CLAUDE_DIR" ]; then
-    CLAUDE_DIR="$(cd "$CLAUDE_DIR" 2>/dev/null && pwd || echo "$CLAUDE_DIR")"
-    mkdir -p "$CLAUDE_DIR"
-    CLAUDE_DIR_ARGS=(-v "$CLAUDE_DIR:/home/coder/.claude")
+# Default to a per-project state dir under $HOME so Claude
+# credentials and session history persist across container restarts
+# without requiring any explicit flag.
+if [ -z "$CLAUDE_DIR" ]; then
+    CLAUDE_DIR="$HOME/.ai-sandbox/$(basename "$PROJECT_PATH")"
 fi
+mkdir -p "$CLAUDE_DIR"
+CLAUDE_DIR="$(cd "$CLAUDE_DIR" && pwd)"
+CLAUDE_DIR_ARGS=(-v "$CLAUDE_DIR:/home/coder/.claude")
 
 # ── Start container in background ─────────────────────────────────
 echo "Starting container: ${CONTAINER_NAME}"
