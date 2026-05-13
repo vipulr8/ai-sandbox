@@ -121,10 +121,14 @@ ARG CLAUDE_VERSION=latest
 RUN npm install -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}" \
     && npm cache clean --force
 
-# ── Container hooks and settings ─────────────────────────────────
+# ── Container hooks and managed settings ─────────────────────────
+# Hooks stay in /opt/ai-sandbox/hooks/; the managed-settings JSON
+# lives at Claude Code's native managed-scope path so it is loaded
+# at the top of the precedence chain without any runtime merge.
 COPY container-hooks/ /opt/ai-sandbox/hooks/
 RUN chmod +x /opt/ai-sandbox/hooks/*.sh
-COPY container-settings.json /opt/ai-sandbox/settings.json
+RUN mkdir -p /etc/claude-code
+COPY container-settings.json /etc/claude-code/managed-settings.json
 
 # ── Starship prompt ───────────────────────────────────────────────
 RUN curl -fsSL https://starship.rs/install.sh | sh -s -- -y
