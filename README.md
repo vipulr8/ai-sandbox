@@ -78,7 +78,7 @@ Colima auto-starts on login if you ran `brew services start colima`; otherwise `
 
 ## Authentication
 
-Use `--claude-dir` to mount any host directory as `~/.claude` inside the container. This is where Claude stores credentials, settings, and session history. The entrypoint merges any `settings.json` found in the directory with container security hooks (hooks always take priority).
+Use `--claude-dir` to override the auto-default state directory. By default, persistence is on: state goes to `~/.ai-sandbox/<project-basename>/` on the host. Pass `--claude-dir <path>` to point it somewhere else (e.g., to share credentials across projects). The container never modifies `settings.json` inside this directory — its own enforcement settings live in a separate managed-settings file inside the image.
 
 ### API key mode
 
@@ -112,14 +112,16 @@ mkdir -p ~/.ai-sandbox/auth
 ./dev.sh ~/myproject --claude-dir ~/.ai-sandbox/auth
 ```
 
-### Ephemeral mode
+### Auto-persist mode (default)
 
-No `--claude-dir` — nothing persists. Log in every time.
+No flag needed — state lives in `~/.ai-sandbox/<project-basename>/` on your host. Log in once per project, session history and credentials persist across container restarts.
 
 ```bash
 ./run.sh ~/myproject --claude
 ./dev.sh ~/myproject
 ```
+
+To wipe state for a single project: `rm -rf ~/.ai-sandbox/<project-basename>`.
 
 ### Wipe credentials
 
@@ -287,9 +289,9 @@ PROJECT_DIR=~/myproject docker compose --profile interactive run --rm claude-int
 | Container path | Host source | When | Purpose |
 |----------------|-------------|------|---------|
 | `/home/coder/project` | Your project directory | Always | Working directory for code |
-| `/home/coder/.claude` | `--claude-dir` path | `--claude-dir` used | Persistent config, credentials, session history |
+| `/home/coder/.claude` | `--claude-dir` path (default: `~/.ai-sandbox/<project-basename>/`) | Always | Persistent config, credentials, session history |
 
-The entrypoint merges any `settings.json` found in the mounted directory with container security hooks on every startup. Hooks always take priority and cannot be overridden.
+Container-enforced settings (PreToolUse hooks, attribution-stripping) live inside the image at `/etc/claude-code/managed-settings.json` and take precedence over any user settings via Claude Code's native managed-settings layer. The container does not read or modify `settings.json` inside the bind-mounted `--claude-dir`.
 
 **Colima note:** Only paths under your home directory are mounted into the Colima VM by default.
 
