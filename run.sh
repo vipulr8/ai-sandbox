@@ -27,7 +27,8 @@ Usage:
 
 Options:
   --claude                    Launch Claude Code CLI directly instead of zsh
-  --claude-dir <path>         Mount a host directory as Claude config (~/.claude inside container)
+  --claude-dir <path>         Host directory mounted as ~/.claude in the container.
+                              Defaults to ~/.ai-sandbox/<project-basename>/ (persistence on by default).
   --claude-version <version>  Use a specific Claude Code version (default: latest)
   --build                     Build or rebuild the Docker image locally
   --help                      Show this help
