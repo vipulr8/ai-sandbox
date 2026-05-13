@@ -7,10 +7,10 @@ Isolated Docker container for running Claude Code with a full-stack development 
 > | Host OS | Status | Recommended runtime (OSS) | Alternative |
 > |---------|--------|---------------------------|-------------|
 > | macOS   | ✓ verified | Colima | Docker Desktop |
-> | Linux   | ✓ via WSL2 | Docker Engine | Docker Desktop |
-> | Windows | ✓ via WSL2 | Docker Engine inside WSL2 | Docker Desktop (WSL2 backend) |
+> | Linux   | ◇ pending verification | Docker Engine | Docker Desktop |
+> | Windows | ◇ pending verification (WSL2 only) | Docker Engine inside WSL2 | Docker Desktop (WSL2 backend) |
 >
-> The Linux row uses "via WSL2" pending external verification on a native Linux host. Once a Linux tester confirms the setup runbook passes, this will become "verified". Docker Desktop is listed as the second option on every row because it carries a commercial-use license tier for organizations >250 employees or >$10M revenue.
+> Linux and Windows rows are marked "pending verification" until an external tester confirms the setup runbook passes on each. Once verified, the rows become "✓ verified". Windows is supported via WSL2 only; native Windows (PowerShell launchers, no WSL2) is out of scope. Docker Desktop is listed as the second option on every row because it carries a commercial-use license tier for organizations >250 employees or >$10M revenue.
 
 ## What's inside
 
