@@ -10,7 +10,7 @@ Isolated Docker container for running Claude Code with a full-stack development 
 |----------|-------|
 | Languages | Node.js 22 LTS, Python 3.12, Go 1.24, Rust stable, OpenJDK 21 |
 | Python | uv (package manager), ruff (linter/formatter) |
-| AI | Claude Code CLI + VS Code extension (version-pinned) |
+| AI | Claude Code CLI + VS Code extension (version-pinned); superpowers plugin (brainstorming, plan-writing, TDD, debugging); openspec CLI |
 | Git | git, gh (GitHub CLI), gitleaks |
 | Shell | zsh (default) with starship prompt, autosuggestions, syntax highlighting, history search |
 | Dev tools | make, gcc, jq, ripgrep, fd, tmux, vim, nano, shellcheck, htop, tree |
@@ -312,6 +312,12 @@ Container-enforced settings (PreToolUse hooks, attribution-stripping) live insid
 ### Adding tools
 
 The Dockerfile layers are designed to be independently modifiable. To add or remove language runtimes, comment out or add layers.
+
+### Baked Claude plugins
+
+Plugins listed in `claude-plugins.txt` (repo root) are git-cloned at build time into `/opt/ai-sandbox/plugins/<name>/` and loaded automatically by every `claude` invocation via `--plugin-dir`. To add a plugin, append a line to that file in the format `<name> <git-url> [<ref-or-sha>]` and rebuild. Pinning to a sha gives reproducible builds; omit the third column to track `main`.
+
+User-installed plugins via `/plugin install foo` are unaffected — they continue to write to `~/.claude/plugins/` (the per-project state dir on host) and coexist with the baked set.
 
 ## Licensing
 
