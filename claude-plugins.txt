@@ -1,0 +1,6 @@
+# Claude Code plugins baked into the image.
+# Format: <name> <git-url> [<ref-or-sha>]
+# Empty lines and lines starting with # are ignored.
+# Adding a line here + rebuilding the image installs the plugin
+# at /opt/ai-sandbox/plugins/<name>/, loaded via --plugin-dir.
+superpowers https://github.com/obra/superpowers.git f2cbfbefebbfef77321e4c9abc9e949826bea9d7
