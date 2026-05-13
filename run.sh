@@ -150,12 +150,15 @@ DOCKER_ARGS=(
     -w /home/coder/project
 )
 
-# Mount Claude config directory if provided
-if [ -n "$CLAUDE_DIR" ]; then
-    CLAUDE_DIR="$(cd "$CLAUDE_DIR" 2>/dev/null && pwd || echo "$CLAUDE_DIR")"
-    mkdir -p "$CLAUDE_DIR"
-    DOCKER_ARGS+=(-v "$CLAUDE_DIR:/home/coder/.claude")
+# Default --claude-dir to a per-project state dir under $HOME so
+# Claude credentials and session history persist across container
+# restarts without requiring any explicit flag.
+if [ -z "$CLAUDE_DIR" ]; then
+    CLAUDE_DIR="$HOME/.ai-sandbox/$(basename "$PROJECT_PATH")"
 fi
+mkdir -p "$CLAUDE_DIR"
+CLAUDE_DIR="$(cd "$CLAUDE_DIR" && pwd)"
+DOCKER_ARGS+=(-v "$CLAUDE_DIR:/home/coder/.claude")
 
 # Optional Docker socket mount
 if [ "${DOCKER_SOCKET:-0}" = "1" ]; then
