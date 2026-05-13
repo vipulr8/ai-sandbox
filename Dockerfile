@@ -127,7 +127,6 @@ RUN npm install -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}" \
 # at the top of the precedence chain without any runtime merge.
 COPY container-hooks/ /opt/ai-sandbox/hooks/
 RUN chmod +x /opt/ai-sandbox/hooks/*.sh
-RUN mkdir -p /etc/claude-code
 COPY container-settings.json /etc/claude-code/managed-settings.json
 
 # ── Starship prompt ───────────────────────────────────────────────
