@@ -183,7 +183,7 @@ ls /tmp/install-claude-ext.log
 cat /tmp/install-claude-ext.log
 ```
 
-**Expected:** the log file exists and ends with a success message confirming the Claude Code extension installed via the post-attach loop.
+**Expected:** the log file exists and the last line reads `[HH:MM:SS] Done (exit 0).` (the exact timestamp varies; what matters is the `exit 0`). A non-zero exit code means the extension install failed; report the full log contents.
 
 Verify in VS Code: open the Extensions panel (Ctrl+Shift+X). The "Claude Code" extension should appear in the installed list under "Container".
 
