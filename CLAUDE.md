@@ -50,6 +50,18 @@ VS Code extensions follow a **hybrid install model** — most baked at build tim
 
 `ai-sandbox:latest` is the default. `--claude-version <X>` produces `ai-sandbox:cc-<X>`. They are independent images that share lower Docker layers; only the Claude Code npm install layer differs. The launcher auto-builds whichever tag is requested if missing.
 
+### Baked Claude plugins
+
+`claude-plugins.txt` (repo root) enumerates Claude Code plugins to bake into the image. Format: `<name> <git-url> [<ref-or-sha>]`, one per line; empty lines and `#`-comments are ignored. At build time, `scripts/install-claude-plugins.sh` (invoked by Dockerfile Layer 7.5) clones each plugin into `/opt/ai-sandbox/plugins/<name>/` and pins to the optional sha for reproducibility.
+
+The installer also generates `/usr/local/bin/claude` — a 5-line wrapper that exec's the real Claude CLI, prepending one `--plugin-dir /opt/ai-sandbox/plugins/<name>` flag for each baked plugin. Because `/usr/local/bin` precedes `/usr/bin` and Node global-install paths on Debian, the wrapper transparently shadows the npm-installed `claude` for interactive shells, the VS Code extension, and any other caller.
+
+User-installed plugins via the `/plugin install foo` slash command continue to write to `~/.claude/plugins/` (the per-project bind-mount with auto-persist defaults) and are loaded by Claude's default scan. The baked set and the per-project set coexist; baked plugins always load, user-installed ones persist per-project.
+
+To add a baked plugin: append a line to `claude-plugins.txt` and rebuild. The installer reads the file at build time only — no runtime re-scan. To remove or change a sha, same flow: edit the file, rebuild.
+
+`OpenSpec` is a separate concern. It's an npm CLI (`@fission-ai/openspec`) installed globally in the same Dockerfile layer. It is NOT a Claude plugin — it provides its own slash commands once a user runs `openspec init` inside a project (which writes files into the project tree). Don't conflate it with the plugin baking machinery.
+
 ### Managed settings (the security-critical bit)
 
 `container-settings.json` is baked into the image at `/etc/claude-code/managed-settings.json` — Claude Code's native managed-settings location on Linux. The managed-settings layer sits at the top of Claude Code's settings precedence chain (managed > local > project > user), so the container's `PreToolUse` hooks and attribution-stripping config always win, with no runtime merge required.

@@ -121,6 +121,18 @@ ARG CLAUDE_VERSION=latest
 RUN npm install -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}" \
     && npm cache clean --force
 
+# ── Layer 7.5: Claude plugins + OpenSpec ─────────────────────────
+# OpenSpec is a standalone CLI; the user runs `openspec init` per
+# project themselves. Plugin install script reads claude-plugins.txt,
+# clones each plugin, and generates /usr/local/bin/claude wrapper.
+RUN npm install -g @fission-ai/openspec@latest \
+    && npm cache clean --force
+COPY claude-plugins.txt /tmp/claude-plugins.txt
+COPY scripts/install-claude-plugins.sh /tmp/install-claude-plugins.sh
+RUN chmod +x /tmp/install-claude-plugins.sh \
+    && /tmp/install-claude-plugins.sh /tmp/claude-plugins.txt \
+    && rm /tmp/install-claude-plugins.sh /tmp/claude-plugins.txt
+
 # ── Container hooks and managed settings ─────────────────────────
 # Hooks stay in /opt/ai-sandbox/hooks/; the managed-settings JSON
 # lives at Claude Code's native managed-scope path so it is loaded
