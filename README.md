@@ -28,7 +28,7 @@ The container itself is the primary isolation boundary — host secrets (SSH key
 | **AI GitHub publishing blocked** | Same hook denies `gh pr create|merge|comment`, `gh issue create|comment`, `gh release create`, `gh repo create|delete` from Claude. |
 | **Gitleaks pre-commit** | Wired up at build via `git config --system core.hooksPath`. Scans every commit for secrets automatically. |
 | **Commit message scrubbing** | `commit-msg` git hook strips Claude/Anthropic `Co-Authored-By` and "Generated with Claude" lines. |
-| **Settings merge** | User-supplied `settings.json` is merged with container hooks via `jq -s '.[0] * .[1]'` so the container hooks always win on conflicts. |
+| **Managed settings** | Container-enforced settings (PreToolUse hooks, attribution) live at `/etc/claude-code/managed-settings.json`, Claude Code's native managed-settings location. The managed layer sits at the top of Claude Code's settings precedence chain, so container policies always win — without merging into or overwriting your `--claude-dir` `settings.json`. |
 | **Host VS Code isolation** | Settings sync blocked; Copilot blocked; extension versions pinned. |
 
 Earlier image versions also tried to block `.env` / `*.key` file reads, system-path writes, `sudo`, and access to `~/.gnupg` / `~/.kube` / `~/.claude/` etc. Those were removed: in container isolation they protected against threats that don't exist (host creds aren't reachable; project files are intentionally visible) while creating friction for normal Claude Code operations (`Update plan` writes to `~/.claude/`, projects often have legitimate `.env` files). The remote-publishing block is the one that actually matters — it's the only operation that escapes the sandbox.
