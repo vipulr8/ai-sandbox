@@ -36,9 +36,33 @@ Earlier image versions also tried to block `.env` / `*.key` file reads, system-p
 ## Prerequisites
 
 - macOS host
-- A container runtime (e.g., [Colima](https://github.com/abapGit/colima) or Docker Desktop)
+- A container runtime (e.g., [Colima](https://github.com/abiosoft/colima) or Docker Desktop)
 - Docker CLI (`brew install docker` on macOS)
 - docker-buildx plugin (`brew install docker-buildx` on macOS)
+
+## Colima setup
+
+Skip this section if you're on Docker Desktop. Colima defaults to a **2 GiB / 2 CPU** VM, which is tight for a full Node + Go + Rust + Python toolchain plus VS Code Server. Bump it before first use:
+
+```bash
+brew install colima docker
+
+# Start with a reasonable budget; saved to ~/.colima/default/colima.yaml,
+# so future `colima start` calls reuse it.
+colima start --cpu 4 --memory 12 --disk 60
+
+# Verify
+docker info --format '{{.MemTotal}}'   # ~12.8e9 bytes for --memory 12
+```
+
+Pick numbers that fit your Mac's physical RAM — Colima reserves whatever you allocate. To change later:
+
+```bash
+colima stop                                 # WARNING: kills running containers
+colima start --cpu 6 --memory 16            # new sizing, persisted
+```
+
+Colima auto-starts on login if you ran `brew services start colima`; otherwise `colima start` (no args) brings up the VM with your saved profile.
 
 ## Quick start
 
