@@ -2,7 +2,15 @@
 
 Isolated Docker container for running Claude Code with a full-stack development toolchain. Security-hardened: AI tools are sandboxed to the project directory with no access to host config, credentials, or system files.
 
-> **Supported platform: macOS only.** The image bakes UID 1000 at build time and relies on Docker Desktop / Colima translating UIDs across the bind-mount boundary. On Linux hosts with UID ≠ 1000, files written into bind-mounted directories will appear owned by 1000 on the host. Linux support is intentionally out of scope.
+> **Supported hosts:** macOS, Linux, and Windows (via WSL2). The image's container user is matched to your host UID at build time (`--build-arg USER_UID=$(id -u)`), so bind-mounts behave correctly on any Unix-like host.
+>
+> | Host OS | Status | Recommended runtime (OSS) | Alternative |
+> |---------|--------|---------------------------|-------------|
+> | macOS   | ✓ verified | Colima | Docker Desktop |
+> | Linux   | ✓ via WSL2 | Docker Engine | Docker Desktop |
+> | Windows | ✓ via WSL2 | Docker Engine inside WSL2 | Docker Desktop (WSL2 backend) |
+>
+> The Linux row uses "via WSL2" pending external verification on a native Linux host. Once a Linux tester confirms the setup runbook passes, this will become "verified". Docker Desktop is listed as the second option on every row because it carries a commercial-use license tier for organizations >250 employees or >$10M revenue.
 
 ## What's inside
 
@@ -35,12 +43,12 @@ Earlier image versions also tried to block `.env` / `*.key` file reads, system-p
 
 ## Prerequisites
 
-- macOS host
-- A container runtime (e.g., [Colima](https://github.com/abiosoft/colima) or Docker Desktop)
-- Docker CLI (`brew install docker` on macOS)
-- docker-buildx plugin (`brew install docker-buildx` on macOS)
+- A supported host (macOS, Linux, or Windows with WSL2)
+- A Docker runtime per the matrix above
+- The `docker` CLI and `docker-buildx` plugin (bundled with most installs; if not, see your runtime's docs)
+- For VS Code attach mode (`dev.sh`), Microsoft Visual Studio Code with the appropriate remote extension installed (see per-platform setup below)
 
-## Colima setup
+## macOS setup
 
 Skip this section if you're on Docker Desktop. Colima defaults to a **2 GiB / 2 CPU** VM, which is tight for a full Node + Go + Rust + Python toolchain plus VS Code Server. Bump it before first use:
 
@@ -63,6 +71,87 @@ colima start --cpu 6 --memory 16            # new sizing, persisted
 ```
 
 Colima auto-starts on login if you ran `brew services start colima`; otherwise `colima start` (no args) brings up the VM with your saved profile.
+
+## Linux setup
+
+The OSS-friendly default. The launchers don't need a GUI runtime; install Docker Engine directly from the official Docker repos.
+
+### Install Docker Engine
+
+Follow the official Docker installation guide for your distribution:
+
+- **Debian/Ubuntu:** https://docs.docker.com/engine/install/ubuntu/
+- **Fedora/CentOS/RHEL:** https://docs.docker.com/engine/install/fedora/
+- **Other distros:** https://docs.docker.com/engine/install/
+
+Then add your user to the `docker` group so you don't need `sudo` for every container command:
+
+```bash
+sudo usermod -aG docker $USER
+newgrp docker   # or log out and back in
+docker run hello-world   # should succeed without sudo
+```
+
+No UID workaround is needed. The launchers pass `--build-arg USER_UID=$(id -u)` to `docker build`, so the locally-built image's container user matches your host user regardless of whether your UID is 1000 or something else.
+
+### VS Code (for dev.sh)
+
+Install Visual Studio Code from your distro's package manager or from https://code.visualstudio.com. Install the **Dev Containers** extension (`ms-vscode-remote.remote-containers`). The `code` CLI ships with VS Code and lands on `$PATH` automatically on Linux.
+
+### Or: use Docker Desktop
+
+Docker Desktop is available for Linux and works identically. It carries a commercial-use license for organizations >250 employees OR >$10M annual revenue. The launchers don't care which Docker runtime is running.
+
+## Windows + WSL2 setup
+
+On Windows, ai-sandbox runs inside a WSL2 Linux distribution. The launchers and Docker both live inside WSL2; your Windows VS Code attaches to containers via WSL2 transparently.
+
+### 1. Install WSL2
+
+From an elevated PowerShell:
+
+```powershell
+wsl --install
+```
+
+This installs WSL2 plus an Ubuntu distribution by default. Restart when prompted, then open the Ubuntu shell from the Start menu.
+
+### 2. Install Docker Engine inside WSL2
+
+Inside the WSL2 Ubuntu shell, follow the [Linux setup](#linux-setup) instructions. The same `apt`-based Docker Engine install works because WSL2 IS Linux from Docker's perspective.
+
+Start the Docker daemon:
+
+```bash
+sudo service docker start
+```
+
+Modern WSL versions (0.67.6+) include systemd support enabled by default, so `systemctl enable docker` makes it autostart. Older WSL setups need a shell-rc hook or manual start each session.
+
+### 3. Install VS Code with the WSL extension (required for dev.sh)
+
+On the Windows side, install Visual Studio Code from https://code.visualstudio.com. Then install the **WSL** extension (`ms-vscode-remote.remote-wsl`) and the **Dev Containers** extension (`ms-vscode-remote.remote-containers`).
+
+Inside the WSL2 shell, run `code .` at least once. This bootstraps the WSL→Windows VS Code bridge that `dev.sh` relies on for the container-attach URI scheme.
+
+### 4. Clone the repo inside WSL2
+
+Critical: clone ai-sandbox AND your project repositories INSIDE the WSL2 filesystem:
+
+```bash
+# Inside the WSL2 shell:
+mkdir -p ~/code
+cd ~/code
+git clone <ai-sandbox-repo-url>
+```
+
+Do **not** clone into a Windows-mounted path like `/mnt/c/Users/...`. Those paths have slow filesystem performance and inconsistent bind-mount UID semantics across the Windows/WSL boundary. Keep all of your dev work native to WSL2.
+
+From this point on, use the launcher scripts (`./run.sh`, `./dev.sh`) inside the WSL2 shell exactly as on Linux.
+
+### Or: use Docker Desktop with WSL2 backend
+
+Docker Desktop with WSL2 integration enabled is a more polished but commercial alternative — Docker Desktop installs in Windows and exposes the daemon to your WSL2 distros. Same license tier as elsewhere (free for personal/small business, paid for orgs >250 employees or >$10M revenue).
 
 ## Quick start
 
