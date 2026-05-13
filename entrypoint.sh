@@ -1,44 +1,6 @@
 #!/bin/bash
 set -e
 
-# ── 1. Claude settings ────────────────────────────────────────────
-# Start with baked-in settings (hooks, attribution rules).
-# If user provided a settings.json via --settings, merge it in
-# so the API key is picked up but hooks are never overridden.
-mkdir -p "$HOME/.claude"
-# Check for user settings: either mounted via --settings (old) or in the claude dir
-USER_SETTINGS=""
-if [ -f /tmp/user-settings.json ] && [ -s /tmp/user-settings.json ]; then
-    USER_SETTINGS="/tmp/user-settings.json"
-elif [ -f "$HOME/.claude/settings.json" ] && [ -s "$HOME/.claude/settings.json" ]; then
-    # Settings exist in mounted claude dir — save before overwriting
-    cp "$HOME/.claude/settings.json" /tmp/mounted-settings.json 2>/dev/null
-    USER_SETTINGS="/tmp/mounted-settings.json"
-fi
-
-if [ -n "$USER_SETTINGS" ] && [ -f /opt/ai-sandbox/settings.json ]; then
-    if jq -s '.[0] * .[1]' "$USER_SETTINGS" /opt/ai-sandbox/settings.json \
-        > "$HOME/.claude/settings.json" 2>/dev/null; then
-        echo "* Settings loaded (user config + container hooks)"
-    else
-        echo "! Warning: Failed to merge settings, using container defaults"
-        cp /opt/ai-sandbox/settings.json "$HOME/.claude/settings.json"
-    fi
-elif [ -f /opt/ai-sandbox/settings.json ]; then
-    cp /opt/ai-sandbox/settings.json "$HOME/.claude/settings.json"
-fi
-
-# ── 1b. Restore .claude.json if backup exists ─────────────────────
-# Claude Code expects ~/.claude.json at the home root. On container
-# restart it's lost, but backups persist in the mounted --claude-dir.
-# Pick the largest backup (small ones are empty/reset configs).
-if [ ! -f "$HOME/.claude.json" ]; then
-    BACKUP=$(ls -S "$HOME/.claude/backups/.claude.json.backup."* 2>/dev/null | head -1)
-    if [ -n "$BACKUP" ] && [ "$(stat -c%s "$BACKUP")" -gt 100 ]; then
-        cp "$BACKUP" "$HOME/.claude.json"
-    fi
-fi
-
 # ── 2. Docker socket permissions ──────────────────────────────────
 if [ -S /var/run/docker.sock ]; then
     DOCKER_GID=$(stat -c '%g' /var/run/docker.sock)
