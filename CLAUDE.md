@@ -50,15 +50,16 @@ VS Code extensions follow a **hybrid install model** — most baked at build tim
 
 `ai-sandbox:latest` is the default. `--claude-version <X>` produces `ai-sandbox:cc-<X>`. They are independent images that share lower Docker layers; only the Claude Code npm install layer differs. The launcher auto-builds whichever tag is requested if missing.
 
-### Settings merge (the security-critical bit)
+### Managed settings (the security-critical bit)
 
-`container-settings.json` is baked into the image at `/opt/ai-sandbox/settings.json` and contains the `PreToolUse` hooks plus attribution-stripping config. On every container start, `entrypoint.sh` merges any user-provided `settings.json` (from a `--claude-dir` mount or legacy `/tmp/user-settings.json`) with the container settings using:
+`container-settings.json` is baked into the image at `/etc/claude-code/managed-settings.json` — Claude Code's native managed-settings location on Linux. The managed-settings layer sits at the top of Claude Code's settings precedence chain (managed > local > project > user), so the container's `PreToolUse` hooks and attribution-stripping config always win, with no runtime merge required.
 
-```sh
-jq -s '.[0] * .[1]' "$USER_SETTINGS" /opt/ai-sandbox/settings.json
-```
+Two consequences of using the native layer instead of a runtime `jq` merge:
 
-The right operand wins in jq's `*` merge — so **container values always override user-provided values for the same keys**. The merge is recursive for objects but **replace-wins for arrays**, which is what makes the security guarantee actually hold: `hooks.PreToolUse` is a JSON array, so a user-supplied `PreToolUse` array is wholly replaced by the container's array (not concatenated, not deduped). Any new top-level key added to `container-settings.json` automatically takes precedence over user config. Don't reverse the operand order, and don't switch to a different merge tool without preserving both the right-wins-on-scalars and replace-wins-on-arrays behavior.
+1. **The container never reads or writes `settings.json` inside the bind-mounted `~/.claude/`.** A user-owned `settings.json` in `--claude-dir` is invisible to the container. This means it is safe to point `--claude-dir` at a host-shared Claude config directory; an earlier merge-and-write-back design would have corrupted that file with container-only hook paths.
+2. **Container enforcement is structurally stronger than before.** It's applied by Claude Code's settings loader directly, not by an entrypoint script whose correctness depends on `jq` semantics and operand ordering. Any new top-level key added to `container-settings.json` automatically takes precedence over user config.
+
+When extending the container's enforced policies, edit `container-settings.json` directly. Hook command paths inside that JSON still point at `/opt/ai-sandbox/hooks/...` since that's where `container-hooks/` is copied at build time (Dockerfile L125).
 
 ### Two layers of hooks
 
@@ -75,22 +76,23 @@ Two unrelated systems both live under `container-hooks/` and shouldn't be confla
 
 PID 1 runs `entrypoint.sh` directly as the `coder` user — the Dockerfile's final `USER` directive sets that. There is no root phase, no `gosu`, no `usermod`. Each container start:
 
-1. **Settings merge** — if a user `settings.json` is present (mounted via `--claude-dir` at `~/.claude/settings.json`, or the legacy `/tmp/user-settings.json` path), merge it with `/opt/ai-sandbox/settings.json` via `jq -s '.[0] * .[1]'`. Otherwise copy the container settings as-is.
-2. **`.claude.json` restore** — if `$HOME/.claude.json` is missing, restore from the largest file in `$HOME/.claude/backups/`. Claude Code expects this file at the home root, but only `~/.claude` is bind-mounted, so backups live under the mount and are copied back on startup.
-3. **Docker socket group fix** — if `/var/run/docker.sock` is mounted, ensure the `coder` user is in a group matching the socket's GID (uses `sudo` since `coder` has passwordless sudo).
-4. **Auth status print** + environment summary banner.
-5. **VS Code Server settings** — write `~/.vscode-server/data/Machine/settings.json` to disable settings sync, block Copilot, pin terminal to zsh, set Monokai theme.
-6. `exec "$@"` (the CMD — defaults to `zsh`).
+1. **`.claude.json` symlink** — `ln -sf "$HOME/.claude/.claude.json" "$HOME/.claude.json"` so writes by Claude Code at home root flow into the bind-mounted `~/.claude/` and persist on the host.
+2. **Docker socket group fix** — if `/var/run/docker.sock` is mounted, ensure the `coder` user is in a group matching the socket's GID (uses `sudo` since `coder` has passwordless sudo).
+3. **Auth status print** + environment summary banner.
+4. **VS Code Server settings** — write `~/.vscode-server/data/Machine/settings.json` to disable settings sync, block Copilot, pin terminal to zsh, set Monokai theme.
+5. `exec "$@"` (the CMD — defaults to `zsh`).
+
+The entrypoint does **not** read, merge, or write any user-owned `settings.json`. Container-enforced settings are at `/etc/claude-code/managed-settings.json` (Dockerfile-baked), loaded directly by Claude Code via the managed-settings layer.
 
 ### Volume mounts
 
 | Container path | Source | Notes |
 |----------------|--------|-------|
 | `/home/coder/project` | `--` positional arg | working dir; required |
-| `/home/coder/.claude` | `--claude-dir` | optional; persists credentials, settings, session history, `.claude.json` backups |
+| `/home/coder/.claude` | `--claude-dir` (defaults to `$HOME/.ai-sandbox/<project-basename>/`) | persists credentials, settings, session history, `.claude.json` (via symlink) |
 | `/var/run/docker.sock` | env `DOCKER_SOCKET=1` | optional; auto-detects Colima/`DOCKER_HOST`/standard paths |
 
-`--claude-dir` is the single mount point for all Claude state. There is no longer a separate `--settings` flag (commit `c0e4027` replaced it); the entrypoint still has a fallback that reads `/tmp/user-settings.json` for backwards compat but new code should not rely on it.
+`--claude-dir` is the single mount point for all Claude state. With auto-persist defaults, no flag is required for state to survive container restarts.
 
 ## Conventions worth knowing
 
