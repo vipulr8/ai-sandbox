@@ -54,7 +54,7 @@ VS Code extensions follow a **hybrid install model** — most baked at build tim
 
 `claude-plugins.txt` (repo root) enumerates Claude Code plugins to bake into the image. Format: `<name> <git-url> [<ref-or-sha>]`, one per line; empty lines and `#`-comments are ignored. At build time, `scripts/install-claude-plugins.sh` (invoked by Dockerfile Layer 7.5) clones each plugin into `/opt/ai-sandbox/plugins/<name>/` and pins to the optional sha for reproducibility.
 
-The installer also generates `/usr/local/bin/claude` — a 5-line wrapper that exec's the real Claude CLI with one `--plugin-dir /opt/ai-sandbox/plugins/<name>` flag pre-pended per baked plugin. Because `/usr/local/bin` precedes `/usr/bin` and Node global-install paths on Debian, the wrapper transparently shadows the npm-installed `claude` for interactive shells, the VS Code extension, and any other caller.
+The installer also generates `/usr/local/bin/claude` — a 5-line wrapper that exec's the real Claude CLI, prepending one `--plugin-dir /opt/ai-sandbox/plugins/<name>` flag for each baked plugin. Because `/usr/local/bin` precedes `/usr/bin` and Node global-install paths on Debian, the wrapper transparently shadows the npm-installed `claude` for interactive shells, the VS Code extension, and any other caller.
 
 User-installed plugins via the `/plugin install foo` slash command continue to write to `~/.claude/plugins/` (the per-project bind-mount with auto-persist defaults) and are loaded by Claude's default scan. The baked set and the per-project set coexist; baked plugins always load, user-installed ones persist per-project.
 
