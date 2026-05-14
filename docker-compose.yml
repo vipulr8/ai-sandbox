@@ -20,6 +20,13 @@ services:
       # Mount your project directory
       - ${PROJECT_DIR:-.}:/home/coder/project
 
+      # Persistent Claude state (credentials, session history, .claude.json).
+      # Override with: CLAUDE_DIR=/some/host/path docker compose run --rm claude
+      # Default mirrors run.sh/dev.sh's auto-persist behavior so a single login
+      # survives across container runs. NOTE: docker-compose does not expand
+      # `~`, so we use $HOME here.
+      - ${CLAUDE_DIR:-${HOME}/.ai-sandbox/compose}:/home/coder/.claude
+
       # Optional: Docker socket (Colima or standard)
       # Uncomment to enable container-in-container:
       # - ${DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock

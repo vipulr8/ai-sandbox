@@ -9,14 +9,28 @@ set -e
 ln -sf "$HOME/.claude/.claude.json" "$HOME/.claude.json"
 
 # ── 2. Docker socket permissions ──────────────────────────────────
-if [ -S /var/run/docker.sock ]; then
+# When DOCKER_SOCKET=1 mounts the host's docker socket, the socket's GID
+# inside the container may not be one `coder` already belongs to. We
+# add a matching group and put `coder` in it — but `usermod -aG` alone
+# is not enough: PID 1's supplementary groups were frozen at container
+# start, so the current process won't see the new group. After the
+# group is added we re-exec the entrypoint via `sg` so the docker
+# group is active for the rest of the entrypoint and for the CMD.
+# AISBX_DOCKER_GROUP_APPLIED guards against re-entry.
+if [ -S /var/run/docker.sock ] && [ -z "${AISBX_DOCKER_GROUP_APPLIED:-}" ]; then
     DOCKER_GID=$(stat -c '%g' /var/run/docker.sock)
-    if ! getent group "$DOCKER_GID" >/dev/null 2>&1; then
-        sudo groupadd -g "$DOCKER_GID" docker-host 2>/dev/null || true
-    fi
-    DOCKER_GROUP=$(getent group "$DOCKER_GID" | cut -d: -f1)
-    if ! id -nG "$(whoami)" | grep -qw "$DOCKER_GROUP"; then
-        sudo usermod -aG "$DOCKER_GROUP" "$(whoami)" 2>/dev/null || true
+    if ! id -G | tr ' ' '\n' | grep -qx "$DOCKER_GID"; then
+        if ! getent group "$DOCKER_GID" >/dev/null 2>&1; then
+            sudo groupadd -g "$DOCKER_GID" docker-host 2>/dev/null || true
+        fi
+        DOCKER_GROUP=$(getent group "$DOCKER_GID" | cut -d: -f1)
+        if [ -n "$DOCKER_GROUP" ] && ! id -nG "$(whoami)" | grep -qw "$DOCKER_GROUP"; then
+            sudo usermod -aG "$DOCKER_GROUP" "$(whoami)" 2>/dev/null || true
+        fi
+        if [ -n "$DOCKER_GROUP" ] && command -v sg >/dev/null 2>&1; then
+            export AISBX_DOCKER_GROUP_APPLIED=1
+            exec sg "$DOCKER_GROUP" -c "exec $(printf '%q ' "$0" "$@")"
+        fi
     fi
 fi
 

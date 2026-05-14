@@ -71,7 +71,7 @@ Two consequences of using the native layer instead of a runtime `jq` merge:
 1. **The container never reads or writes `settings.json` inside the bind-mounted `~/.claude/`.** A user-owned `settings.json` in `--claude-dir` is invisible to the container. This means it is safe to point `--claude-dir` at a host-shared Claude config directory; an earlier merge-and-write-back design would have corrupted that file with container-only hook paths.
 2. **Container enforcement is structurally stronger than before.** It's applied by Claude Code's settings loader directly, not by an entrypoint script whose correctness depends on `jq` semantics and operand ordering. Any new top-level key added to `container-settings.json` automatically takes precedence over user config.
 
-When extending the container's enforced policies, edit `container-settings.json` directly. Hook command paths inside that JSON still point at `/opt/ai-sandbox/hooks/...` since that's where `container-hooks/` is copied at build time (Dockerfile L125).
+When extending the container's enforced policies, edit `container-settings.json` directly. Hook command paths inside that JSON still point at `/opt/ai-sandbox/hooks/...` since that's where `container-hooks/` is copied at build time (the `COPY container-hooks/ /opt/ai-sandbox/hooks/` directive in the Dockerfile).
 
 ### Two layers of hooks
 
