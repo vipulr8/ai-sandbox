@@ -8,6 +8,7 @@ CONTAINER_PREFIX="ai-sandbox"
 # ── Load .env if present ─────────────────────────────────────────
 if [ -f "$SCRIPT_DIR/.env" ]; then
     set -a
+    # shellcheck source=/dev/null
     source "$SCRIPT_DIR/.env"
     set +a
 fi
@@ -184,14 +185,19 @@ if ! docker image inspect "${IMAGE}" >/dev/null 2>&1; then
 fi
 
 # ── Detect Docker socket ─────────────────────────────────────────
+# Prefer /var/run/docker.sock: works on Docker Desktop (real socket)
+# and on Colima (symlink to the home-dir socket that Colima's Lima
+# fileshare recognizes specially). The home-path is only used as a
+# last resort — bind-mounting it directly breaks docker-in-container
+# on Colima because Lima's sshfs/9p doesn't preserve socket semantics.
 DOCKER_SOCK_ARGS=()
 if [ "${DOCKER_SOCKET:-0}" = "1" ]; then
     if [ -n "${DOCKER_HOST:-}" ]; then
         DOCKER_SOCK_ARGS=(-v "${DOCKER_HOST#unix://}:/var/run/docker.sock")
-    elif [ -S "$HOME/.colima/default/docker.sock" ]; then
-        DOCKER_SOCK_ARGS=(-v "$HOME/.colima/default/docker.sock:/var/run/docker.sock")
     elif [ -S /var/run/docker.sock ]; then
         DOCKER_SOCK_ARGS=(-v "/var/run/docker.sock:/var/run/docker.sock")
+    elif [ -S "$HOME/.colima/default/docker.sock" ]; then
+        DOCKER_SOCK_ARGS=(-v "$HOME/.colima/default/docker.sock:/var/run/docker.sock")
     fi
 fi
 

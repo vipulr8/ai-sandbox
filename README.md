@@ -24,8 +24,8 @@ The container itself is the primary isolation boundary — host secrets (SSH key
 
 | Control | How |
 |---------|-----|
-| **AI git push blocked** | PreToolUse hook denies any `git push` / `git remote add|set-url` Bash command from Claude. Users running `git push` themselves inside the container are unaffected. |
-| **AI GitHub publishing blocked** | Same hook denies `gh pr create|merge|comment`, `gh issue create|comment`, `gh release create`, `gh repo create|delete` from Claude. |
+| **AI git push blocked** | PreToolUse hook denies any `git push` / `git remote add\|set-url` Bash command from Claude. Users running `git push` themselves inside the container are unaffected. |
+| **AI GitHub publishing blocked** | Same hook denies `gh pr create\|merge\|comment`, `gh issue create\|comment`, `gh release create`, `gh repo create\|delete` from Claude. |
 | **Gitleaks pre-commit** | Wired up at build via `git config --system core.hooksPath`. Scans every commit for secrets automatically. |
 | **Commit message scrubbing** | `commit-msg` git hook strips Claude/Anthropic `Co-Authored-By` and "Generated with Claude" lines. |
 | **Managed settings** | Container-enforced settings (PreToolUse hooks, attribution) live at `/etc/claude-code/managed-settings.json`, Claude Code's native managed-settings location. The managed layer sits at the top of Claude Code's settings precedence chain, so container policies always win — without merging into or overwriting your `--claude-dir` `settings.json`. |
@@ -137,7 +137,7 @@ rm -rf ~/.ai-sandbox/auth
 
 ### run.sh
 
-```
+```text
 ./run.sh [project-path] [options]
 ```
 

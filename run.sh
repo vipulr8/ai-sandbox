@@ -7,6 +7,7 @@ IMAGE_BASE="ai-sandbox"
 # ── Load .env if present (git-ignored, never committed) ──────────
 if [ -f "$SCRIPT_DIR/.env" ]; then
     set -a
+    # shellcheck source=/dev/null
     source "$SCRIPT_DIR/.env"
     set +a
 fi
@@ -90,13 +91,20 @@ fi
 IMAGE="${IMAGE_BASE}:${IMAGE_TAG}"
 
 # ── Detect Docker socket (Colima-aware) ───────────────────────────
+# Order matters: /var/run/docker.sock is preferred because it works on
+# both Docker Desktop (real socket there) and Colima (a symlink to the
+# home-dir socket that Colima's Lima fileshare recognizes specially).
+# Bind-mounting the home-dir socket directly does NOT work on Colima:
+# Lima's sshfs/9p fileshare doesn't preserve socket semantics, so the
+# socket file appears inside the container but writes never reach the
+# daemon. Falls back to the home path only when /var/run is unavailable.
 detect_docker_sock() {
     if [ -n "${DOCKER_HOST:-}" ]; then
         echo "${DOCKER_HOST#unix://}"
-    elif [ -S "$HOME/.colima/default/docker.sock" ]; then
-        echo "$HOME/.colima/default/docker.sock"
     elif [ -S /var/run/docker.sock ]; then
         echo "/var/run/docker.sock"
+    elif [ -S "$HOME/.colima/default/docker.sock" ]; then
+        echo "$HOME/.colima/default/docker.sock"
     else
         echo ""
     fi
