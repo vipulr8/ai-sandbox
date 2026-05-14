@@ -125,7 +125,9 @@ RUN npm install -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}" \
 # OpenSpec is a standalone CLI; the user runs `openspec init` per
 # project themselves. Plugin install script reads claude-plugins.txt,
 # clones each plugin, and generates /usr/local/bin/claude wrapper.
-RUN npm install -g @fission-ai/openspec@latest \
+# OpenSpec is pinned for reproducible builds — bump deliberately.
+ARG OPENSPEC_VERSION=1.3.1
+RUN npm install -g "@fission-ai/openspec@${OPENSPEC_VERSION}" \
     && npm cache clean --force
 COPY claude-plugins.txt /tmp/claude-plugins.txt
 COPY scripts/install-claude-plugins.sh /tmp/install-claude-plugins.sh

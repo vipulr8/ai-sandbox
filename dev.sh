@@ -130,6 +130,25 @@ fi
 PROJECT_PATH="$(cd "$PROJECT_PATH" && pwd)"
 CONTAINER_NAME="$(container_name_for "$PROJECT_PATH")"
 
+# ── Preflight: required host tools ────────────────────────────────
+# dev.sh hard-depends on `code` (to attach VS Code) and `xxd` (to hex-encode
+# the container name for the vscode-remote:// URI). Fail clean upfront so a
+# missing tool doesn't leave a started container the user can't reach.
+MISSING=()
+command -v docker >/dev/null 2>&1 || MISSING+=("docker (https://docs.docker.com/engine/install/)")
+command -v code   >/dev/null 2>&1 || MISSING+=("code (the VS Code CLI; install via VS Code's 'Shell Command: Install code command in PATH')")
+command -v xxd    >/dev/null 2>&1 || MISSING+=("xxd (ships with vim; 'brew install vim' on macOS)")
+if [ ${#MISSING[@]} -gt 0 ]; then
+    echo "Error: missing required host tool(s):"
+    printf '  - %s\n' "${MISSING[@]}"
+    exit 1
+fi
+
+if ! docker info >/dev/null 2>&1; then
+    echo "Error: Docker daemon is not reachable. Start Docker Desktop or run 'colima start', then retry."
+    exit 1
+fi
+
 # ── Show running instances ────────────────────────────────────────
 list_instances
 
@@ -248,4 +267,4 @@ echo "Claude extension install scheduled (post-attach). Logs: docker exec ${CONT
 # ── Done ──────────────────────────────────────────────────────────
 echo ""
 echo "Ready! Open a terminal in VS Code and run: claude"
-echo "Stop with: ./dev.sh --stop $(basename "$PROJECT_PATH")"
+echo "Stop with: ./dev.sh --stop $PROJECT_PATH"

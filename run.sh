@@ -114,6 +114,16 @@ build_image() {
     echo "Built ${IMAGE} successfully."
 }
 
+# ── Preflight: Docker daemon ──────────────────────────────────────
+if ! command -v docker >/dev/null 2>&1; then
+    echo "Error: 'docker' CLI not found in PATH. Install Docker (Docker Desktop or 'brew install docker' with Colima)."
+    exit 1
+fi
+if ! docker info >/dev/null 2>&1; then
+    echo "Error: Docker daemon is not reachable. Start Docker Desktop or run 'colima start', then retry."
+    exit 1
+fi
+
 if [ "$BUILD_ONLY" = true ]; then
     build_image
     exit 0
@@ -142,7 +152,7 @@ fi
 # ── Docker run args ───────────────────────────────────────────────
 DOCKER_ARGS=(
     --rm -it
-    --name "ai-sandbox-$$"
+    --name "ai-sandbox-run-$(basename "$PROJECT_PATH")-$$"
     --hostname ai-sandbox
     -v "${PROJECT_PATH}:/home/coder/project"
     -e "ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-}"

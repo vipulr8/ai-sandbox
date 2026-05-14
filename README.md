@@ -37,8 +37,8 @@ Earlier image versions also tried to block `.env` / `*.key` file reads, system-p
 
 - macOS host
 - A container runtime (e.g., [Colima](https://github.com/abiosoft/colima) or Docker Desktop)
-- Docker CLI (`brew install docker` on macOS)
-- docker-buildx plugin (`brew install docker-buildx` on macOS)
+- Docker CLI (`brew install docker` on macOS) — Docker Desktop bundles the CLI; Colima users install it separately
+- BuildKit (bundled with Docker Desktop; included via `docker-buildx` if you installed `docker` standalone for Colima)
 
 ## Colima setup
 
@@ -67,7 +67,7 @@ Colima auto-starts on login if you ran `brew services start colima`; otherwise `
 ## Quick start
 
 ```bash
-# Build the image (one-time, ~5–10 min)
+# Build the image (one-time, ~5–10 min; produces a ~4 GB image)
 ./run.sh --build
 
 # Run against a project
@@ -78,7 +78,7 @@ Colima auto-starts on login if you ran `brew services start colima`; otherwise `
 
 ## Authentication
 
-Use `--claude-dir` to override the auto-default state directory. By default, persistence is on: state goes to `~/.ai-sandbox/<project-basename>/` on the host. Pass `--claude-dir <path>` to point it somewhere else (e.g., to share credentials across projects). The container never modifies `settings.json` inside this directory — its own enforcement settings live in a separate managed-settings file inside the image.
+Use `--claude-dir` to override the auto-default state directory. By default, persistence is on: state goes to `~/.ai-sandbox/<project-basename>/` on the host. Pass `--claude-dir <path>` to point it somewhere else — for example, point multiple projects at the *same* host directory (e.g., `~/.ai-sandbox/shared`) to share one logged-in session across all of them. The container never modifies `settings.json` inside this directory — its own enforcement settings live in a separate managed-settings file inside the image.
 
 ### API key mode
 
@@ -279,6 +279,7 @@ PROJECT_DIR=~/myproject docker compose --profile interactive run --rm claude-int
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PROJECT_DIR` | `.` | Project directory to mount |
+| `CLAUDE_DIR` | `$HOME/.ai-sandbox/compose` | Host directory for persistent Claude state (credentials, session history). Mirrors `--claude-dir` in `run.sh`/`dev.sh`. |
 | `CLAUDE_VERSION_TAG` | `latest` | Tag suffix used in the image name (`ai-sandbox:<tag>`) |
 | `CLAUDE_VERSION` | `latest` | Claude Code version baked in at build time |
 | `USER_UID` | `1000` | Container user UID (build-time only; runtime is hardcoded to 1000) |
@@ -318,6 +319,20 @@ The Dockerfile layers are designed to be independently modifiable. To add or rem
 Plugins listed in `claude-plugins.txt` (repo root) are git-cloned at build time into `/opt/ai-sandbox/plugins/<name>/` and loaded automatically by every `claude` invocation via `--plugin-dir`. To add a plugin, append a line to that file in the format `<name> <git-url> [<ref-or-sha>]` and rebuild. Pinning to a sha gives reproducible builds; omit the third column to track `main`.
 
 User-installed plugins via `/plugin install foo` are unaffected — they continue to write to `~/.claude/plugins/` (the per-project state dir on host) and coexist with the baked set.
+
+## Troubleshooting
+
+| Symptom | Likely cause / fix |
+|---------|--------------------|
+| `Error: Docker daemon is not reachable` | Start your container runtime: `colima start` (Colima) or open Docker Desktop. The launchers refuse to proceed until `docker info` succeeds. |
+| `dev.sh` says `missing required host tool: xxd` | Install vim (`brew install vim` on macOS) — `xxd` ships with it and `dev.sh` needs it to hex-encode the container name for the VS Code attach URI. |
+| `dev.sh` says `missing required host tool: code` | Install VS Code and run *Shell Command: Install 'code' command in PATH* from the Command Palette. |
+| VS Code attaches, but the Claude Code extension isn't installed yet | The Claude extension installs **post-attach** (see `dev.sh`). Watch the install log: `docker exec ai-sandbox-<project> cat /tmp/install-claude-ext.log` |
+| Claude keeps asking me to log in every time | You're probably running ephemerally without `--claude-dir`. The default `--claude-dir ~/.ai-sandbox/<project>` should persist; check that the directory exists and is writable on the host. |
+| Build fails partway through with `permission denied` or Colima OOM | Bump the Colima VM: `colima stop && colima start --cpu 4 --memory 12 --disk 60`. A full build needs ~8 GB of headroom. |
+| `docker ps` from inside the container shows `permission denied` after first launch | Only happens with `DOCKER_SOCKET=1`. The entrypoint adds `coder` to the host socket's group and re-execs via `sg`. If the warning persists, open a fresh shell inside the container: `docker exec -it ai-sandbox-<project> zsh`. |
+| Want to wipe one project's state and start fresh | `rm -rf ~/.ai-sandbox/<project-basename>`. To wipe everything: `rm -rf ~/.ai-sandbox`. |
+| Want to free disk: drop old image tags | `docker rmi ai-sandbox:cc-<old-version>`. The `:latest` tag and any version-pinned tags are independent images that share base layers; removing one does not break the others. |
 
 ## Licensing
 
