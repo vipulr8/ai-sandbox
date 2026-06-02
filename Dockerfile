@@ -77,6 +77,17 @@ RUN ARCH="$(dpkg --print-architecture)" \
     && curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_${GL_ARCH}.tar.gz" \
     | tar -C /usr/local/bin -xz gitleaks
 
+# ── AWS CLI v2 ────────────────────────────────────────────────────
+# Official installer (latest v2) per AWS docs. amd64→x86_64, arm64→aarch64.
+# Installs to /usr/local/aws-cli with an `aws` symlink in /usr/local/bin.
+# To pin a version, append e.g. -2.15.30 to the zip name.
+RUN ARCH="$(dpkg --print-architecture)" \
+    && if [ "$ARCH" = "amd64" ]; then AWS_ARCH="x86_64"; else AWS_ARCH="aarch64"; fi \
+    && curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${AWS_ARCH}.zip" -o /tmp/awscliv2.zip \
+    && unzip -q /tmp/awscliv2.zip -d /tmp \
+    && /tmp/aws/install \
+    && rm -rf /tmp/awscliv2.zip /tmp/aws
+
 # ── Layer 3: Rust ─────────────────────────────────────────────────
 ENV RUSTUP_HOME="/usr/local/rustup"
 ENV CARGO_HOME="/usr/local/cargo"
