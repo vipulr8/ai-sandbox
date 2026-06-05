@@ -36,6 +36,9 @@ Options:
 
 Environment variables:
   DOCKER_SOCKET               Set to 1 to mount Docker socket into container
+  AWS_SSO                     Set to 1 to mount ~/.aws (reuse host AWS SSO login)
+  AWS_DIR                     Override AWS config dir source (default: ~/.aws)
+  GH_AUTH                     Set to 1 to inject host 'gh auth token' as GH_TOKEN
 
 Examples:
   ./run.sh ~/myproject --claude --claude-dir ~/.ai-sandbox-api
@@ -186,6 +189,38 @@ if [ "${DOCKER_SOCKET:-0}" = "1" ]; then
         DOCKER_ARGS+=(-v "${SOCK}:/var/run/docker.sock")
     else
         echo "Warning: Docker socket not found, skipping mount."
+    fi
+fi
+
+# Optional AWS SSO config/cache passthrough (host login, shared cache).
+# Enable with AWS_SSO=1; override source dir with AWS_DIR. Read-write so the
+# container can cache derived role credentials under ~/.aws/cli/cache/.
+if [ "${AWS_SSO:-0}" = "1" ]; then
+    AWS_HOST_DIR="${AWS_DIR:-$HOME/.aws}"
+    if [ -d "$AWS_HOST_DIR" ]; then
+        AWS_HOST_DIR="$(cd "$AWS_HOST_DIR" && pwd)"
+        DOCKER_ARGS+=(-v "$AWS_HOST_DIR:/home/coder/.aws")
+    else
+        echo "Warning: AWS_SSO=1 but $AWS_HOST_DIR not found, skipping AWS mount."
+    fi
+fi
+
+# Optional GitHub CLI auth passthrough — reuse the host's gh login.
+# Enable with GH_AUTH=1. `gh auth token` resolves from Keychain or hosts.yml.
+# `-e GH_TOKEN` (no value) reads from this script's env so the token stays out
+# of the docker run argv / ps / shell history (note: it is still visible via
+# `docker inspect`, which reports resolved env values).
+if [ "${GH_AUTH:-0}" = "1" ]; then
+    if ! command -v gh >/dev/null 2>&1; then
+        echo "Warning: GH_AUTH=1 but 'gh' not found in PATH, skipping."
+    else
+        GH_TOKEN_VALUE="$(gh auth token 2>/dev/null || true)"
+        if [ -n "$GH_TOKEN_VALUE" ]; then
+            export GH_TOKEN="$GH_TOKEN_VALUE"
+            DOCKER_ARGS+=(-e GH_TOKEN)
+        else
+            echo "Warning: GH_AUTH=1 but no host gh token found (run 'gh auth login'), skipping."
+        fi
     fi
 fi
 
