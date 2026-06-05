@@ -20,7 +20,7 @@ Base image: Ubuntu 24.04 LTS. Runs as non-root user `coder` with passwordless su
 
 ## Security
 
-The container itself is the primary isolation boundary — host secrets (SSH keys, GPG keys, AWS / kube credentials, etc.) aren't visible inside unless you mount them. On top of that, the image adds:
+The container itself is the primary isolation boundary — host secrets (SSH keys, GPG keys, AWS / kube credentials, etc.) aren't visible inside unless you mount them. The opt-in `AWS_SSO=1` / `GH_AUTH=1` toggles (see [Host credential passthrough](#host-credential-passthrough-aws-sso--github-cli)) are the supported way to share *just* your AWS SSO and GitHub logins; everything else stays out. On top of that, the image adds:
 
 | Control | How |
 |---------|-----|
@@ -261,6 +261,43 @@ The script auto-detects socket paths for Colima, `DOCKER_HOST`, and the standard
 
 > **Note:** This gives the container full access to your host's Docker daemon. Use with care.
 
+## Host credential passthrough (AWS SSO & GitHub CLI)
+
+Two opt-in toggles let the container reuse your **host** logins, so you don't re-authenticate inside the sandbox. Both are **off by default**. Set them once in a git-ignored `.env` next to the launchers and every `run.sh` / `dev.sh` invocation picks them up automatically (the launchers auto-source `.env`).
+
+### GitHub CLI — `GH_AUTH=1`
+
+```bash
+GH_AUTH=1 ./run.sh ~/myproject
+```
+
+Before starting the container, the launcher runs `gh auth token` on the host and injects the result as the `GH_TOKEN` environment variable. `gh` inside the container is then logged in with no `gh auth login` step. The host token is resolved whether it lives in the macOS Keychain or `~/.config/gh/hosts.yml`. If you're not logged in on the host (or `gh` isn't installed), the launcher prints a warning and starts the container without it.
+
+### AWS SSO — `AWS_SSO=1`
+
+```bash
+# 1. Log in on the host (opens your browser). Re-run whenever the session expires.
+aws sso login --profile <your-profile>
+
+# 2. Launch with the mount enabled
+AWS_SSO=1 ./run.sh ~/myproject
+```
+
+This bind-mounts your host `~/.aws` (config **and** the SSO token cache) into the container read-write, so the container's `aws` reuses the token your host `aws sso login` produced — no in-container browser needed. Override the source directory with `AWS_DIR=/some/path`.
+
+> **Named profiles gotcha:** SSO configs define *named* profiles, so a bare `aws sts get-caller-identity` reports `NoCredentials` — it looks for a nonexistent `default` profile. This happens on the host too, not just the container. Pass `--profile <name>` on each command, or set `AWS_PROFILE=<name>` inside the container.
+
+### Set once in `.env`
+
+```bash
+# .env  (git-ignored — never committed)
+GH_AUTH=1
+AWS_SSO=1
+# AWS_DIR=~/.aws        # optional: override the AWS config source dir
+```
+
+> **Security:** These deliberately cross the sandbox's isolation boundary, which is why they're opt-in. The GitHub token is passed via the environment — kept out of the `docker run` argv, `ps`, and shell history, though it remains visible via `docker inspect`. Leaving both toggles unset keeps the container fully isolated from host credentials.
+
 ## docker-compose
 
 For more structured usage:
@@ -284,6 +321,8 @@ PROJECT_DIR=~/myproject docker compose --profile interactive run --rm claude-int
 | `CLAUDE_VERSION` | `latest` | Claude Code version baked in at build time |
 | `USER_UID` | `1000` | Container user UID (build-time only; runtime is hardcoded to 1000) |
 | `USER_GID` | `1000` | Container user GID (build-time only; runtime is hardcoded to 1000) |
+| `GH_TOKEN` | _(unset)_ | GitHub token passed into the container. Compose can't run `gh auth token` itself — export it first: `export GH_TOKEN=$(gh auth token)`. |
+| `AWS_DIR` | `$HOME/.aws` | Source dir for the AWS SSO mount. Uncomment the `~/.aws` volume line in `docker-compose.yml` to enable it (compose equivalent of `AWS_SSO=1`). |
 
 ## Volume mounts
 
@@ -291,6 +330,7 @@ PROJECT_DIR=~/myproject docker compose --profile interactive run --rm claude-int
 |----------------|-------------|------|---------|
 | `/home/coder/project` | Your project directory | Always | Working directory for code |
 | `/home/coder/.claude` | `--claude-dir` path (default: `~/.ai-sandbox/<project-basename>/`) | Always | Persistent config, credentials, session history |
+| `/home/coder/.aws` | `~/.aws` (override with `AWS_DIR`) | `AWS_SSO=1` | Reuse host AWS SSO login + cached token (read-write) |
 
 Container-enforced settings (PreToolUse hooks, attribution-stripping) live inside the image at `/etc/claude-code/managed-settings.json` and take precedence over any user settings via Claude Code's native managed-settings layer. The container does not read or modify `settings.json` inside the bind-mounted `--claude-dir`.
 
