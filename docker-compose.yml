@@ -31,11 +31,18 @@ services:
       # Uncomment to enable container-in-container:
       # - ${DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock
 
+      # Optional: AWS SSO config/cache (host login, shared cache). Compose
+      # equivalent of AWS_SSO=1. Uncomment to enable. $HOME (not ~) required.
+      # - ${AWS_DIR:-${HOME}/.aws}:/home/coder/.aws
+
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-}
       - DISABLE_AUTOUPDATER=1
       - TERM=${TERM:-xterm-256color}
+      # gh auth: compose can't run `gh auth token` itself. Export it first:
+      #   export GH_TOKEN=$(gh auth token)   # then: docker compose run --rm claude
+      - GH_TOKEN=${GH_TOKEN:-}
 
     working_dir: /home/coder/project
 
