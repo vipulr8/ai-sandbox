@@ -54,6 +54,12 @@ Options:
   --list                      List running ai-sandbox instances
   --help                      Show this help
 
+Environment variables:
+  DOCKER_SOCKET               Set to 1 to mount Docker socket into container
+  AWS_SSO                     Set to 1 to mount ~/.aws (reuse host AWS SSO login)
+  AWS_DIR                     Override AWS config dir source (default: ~/.aws)
+  GH_AUTH                     Set to 1 to inject host 'gh auth token' as GH_TOKEN
+
 Examples:
   ./dev.sh ~/myproject --claude-dir ~/.ai-sandbox-api --claude-version 2.1.98
   ./dev.sh ~/myproject --claude-dir ~/.ai-sandbox/auth
@@ -201,6 +207,38 @@ if [ "${DOCKER_SOCKET:-0}" = "1" ]; then
     fi
 fi
 
+# ── Optional AWS SSO config/cache passthrough ────────────────────
+# Enable with AWS_SSO=1; override source with AWS_DIR (default ~/.aws).
+# Read-write so the container can cache derived role credentials.
+AWS_ARGS=()
+if [ "${AWS_SSO:-0}" = "1" ]; then
+    AWS_HOST_DIR="${AWS_DIR:-$HOME/.aws}"
+    if [ -d "$AWS_HOST_DIR" ]; then
+        AWS_HOST_DIR="$(cd "$AWS_HOST_DIR" && pwd)"
+        AWS_ARGS=(-v "$AWS_HOST_DIR:/home/coder/.aws")
+    else
+        echo "Warning: AWS_SSO=1 but $AWS_HOST_DIR not found, skipping AWS mount."
+    fi
+fi
+
+# ── Optional GitHub CLI auth passthrough ─────────────────────────
+# Enable with GH_AUTH=1. Reuses the host gh login; `-e GH_TOKEN` (no value)
+# reads from this script's env to keep the token out of docker inspect.
+GH_ARGS=()
+if [ "${GH_AUTH:-0}" = "1" ]; then
+    if ! command -v gh >/dev/null 2>&1; then
+        echo "Warning: GH_AUTH=1 but 'gh' not found in PATH, skipping."
+    else
+        GH_TOKEN_VALUE="$(gh auth token 2>/dev/null || true)"
+        if [ -n "$GH_TOKEN_VALUE" ]; then
+            export GH_TOKEN="$GH_TOKEN_VALUE"
+            GH_ARGS=(-e GH_TOKEN)
+        else
+            echo "Warning: GH_AUTH=1 but no host gh token found (run 'gh auth login'), skipping."
+        fi
+    fi
+fi
+
 # ── Claude config directory mount ─────────────────────────────────
 # Default to a per-project state dir under $HOME so Claude
 # credentials and session history persist across container restarts
@@ -223,6 +261,8 @@ docker run -d \
     -e "TERM=${TERM:-xterm-256color}" \
     "${DOCKER_SOCK_ARGS[@]+"${DOCKER_SOCK_ARGS[@]}"}" \
     "${CLAUDE_DIR_ARGS[@]+"${CLAUDE_DIR_ARGS[@]}"}" \
+    "${AWS_ARGS[@]+"${AWS_ARGS[@]}"}" \
+    "${GH_ARGS[@]+"${GH_ARGS[@]}"}" \
     -w /home/coder/project \
     "${IMAGE}" \
     sleep infinity >/dev/null
