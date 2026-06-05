@@ -223,7 +223,8 @@ fi
 
 # ── Optional GitHub CLI auth passthrough ─────────────────────────
 # Enable with GH_AUTH=1. Reuses the host gh login; `-e GH_TOKEN` (no value)
-# reads from this script's env to keep the token out of docker inspect.
+# reads from this script's env to keep the token out of the argv / ps / shell
+# history (note: it is still visible via `docker inspect`).
 GH_ARGS=()
 if [ "${GH_AUTH:-0}" = "1" ]; then
     if ! command -v gh >/dev/null 2>&1; then

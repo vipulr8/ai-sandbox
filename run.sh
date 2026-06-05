@@ -208,7 +208,8 @@ fi
 # Optional GitHub CLI auth passthrough — reuse the host's gh login.
 # Enable with GH_AUTH=1. `gh auth token` resolves from Keychain or hosts.yml.
 # `-e GH_TOKEN` (no value) reads from this script's env so the token stays out
-# of the docker run argv / docker inspect.
+# of the docker run argv / ps / shell history (note: it is still visible via
+# `docker inspect`, which reports resolved env values).
 if [ "${GH_AUTH:-0}" = "1" ]; then
     if ! command -v gh >/dev/null 2>&1; then
         echo "Warning: GH_AUTH=1 but 'gh' not found in PATH, skipping."
