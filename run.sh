@@ -209,13 +209,17 @@ fi
 # Enable with GH_AUTH=1. `gh auth token` resolves from Keychain or hosts.yml.
 # `-e GH_TOKEN` (no value) reads from this script's env so the token stays out
 # of the docker run argv / docker inspect.
-if [ "${GH_AUTH:-0}" = "1" ] && command -v gh >/dev/null 2>&1; then
-    GH_TOKEN_VALUE="$(gh auth token 2>/dev/null || true)"
-    if [ -n "$GH_TOKEN_VALUE" ]; then
-        export GH_TOKEN="$GH_TOKEN_VALUE"
-        DOCKER_ARGS+=(-e GH_TOKEN)
+if [ "${GH_AUTH:-0}" = "1" ]; then
+    if ! command -v gh >/dev/null 2>&1; then
+        echo "Warning: GH_AUTH=1 but 'gh' not found in PATH, skipping."
     else
-        echo "Warning: GH_AUTH=1 but no host gh token found (run 'gh auth login'), skipping."
+        GH_TOKEN_VALUE="$(gh auth token 2>/dev/null || true)"
+        if [ -n "$GH_TOKEN_VALUE" ]; then
+            export GH_TOKEN="$GH_TOKEN_VALUE"
+            DOCKER_ARGS+=(-e GH_TOKEN)
+        else
+            echo "Warning: GH_AUTH=1 but no host gh token found (run 'gh auth login'), skipping."
+        fi
     fi
 fi
 
