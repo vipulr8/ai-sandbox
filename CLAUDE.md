@@ -82,7 +82,7 @@ Two unrelated systems both live under `container-hooks/` and shouldn't be confla
 
 **The PreToolUse hook only blocks the AI**, not the human user running `git push` directly inside the container — and that's by design (the human can publish; the AI can't).
 
-**Why so minimal?** Earlier versions of the hooks also blocked file patterns (`.env`, `*.pem`, `*.key`, `credentials.json`, etc.), credential paths (`~/.gnupg`, `~/.kube`, `~/.aws/`, `~/.claude/` itself, etc.), and system-path writes. All of those were removed because the container is otherwise an isolated sandbox: host secrets aren't reachable (not mounted), the project files are *intentionally* visible, and Claude Code legitimately writes to `~/.claude/` for plans/memory/sessions. The blocklists were creating friction (broke `Update plan`, prevented commits whose messages mentioned `.env`, etc.) without protecting against threats that exist in this environment. Remote-publishing is the only operation that actually escapes the sandbox, so it's the only one still blocked.
+**Why so minimal?** Earlier versions of the hooks also blocked file patterns (`.env`, `*.pem`, `*.key`, `credentials.json`, etc.), credential paths (`~/.gnupg`, `~/.kube`, `~/.aws/`, `~/.claude/` itself, etc.), and system-path writes. All of those were removed because the container is otherwise an isolated sandbox: host secrets aren't reachable by default (nothing host-sensitive is mounted unless the user explicitly opts in via `AWS_SSO=1` or `GH_AUTH=1`), the project files are *intentionally* visible, and Claude Code legitimately writes to `~/.claude/` for plans/memory/sessions. The blocklists were creating friction (broke `Update plan`, prevented commits whose messages mentioned `.env`, etc.) without protecting against threats that exist in this environment. Remote-publishing is the only operation that actually escapes the sandbox, so it's the only one still blocked.
 
 ### Entrypoint responsibilities
 
@@ -103,12 +103,13 @@ The entrypoint does **not** read, merge, or write any user-owned `settings.json`
 | `/home/coder/project` | `--` positional arg | working dir; required |
 | `/home/coder/.claude` | `--claude-dir` (defaults to `$HOME/.ai-sandbox/<project-basename>/`) | persists credentials, settings, session history, `.claude.json` (via symlink) |
 | `/var/run/docker.sock` | env `DOCKER_SOCKET=1` | optional; auto-detects Colima/`DOCKER_HOST`/standard paths |
+| `/home/coder/.aws` | env `AWS_SSO=1` (source `AWS_DIR`, default `~/.aws`) | optional; reuse host AWS SSO login + cached token (read-write) |
 
 `--claude-dir` is the single mount point for all Claude state. With auto-persist defaults, no flag is required for state to survive container restarts.
 
 ## Conventions worth knowing
 
 - The container user `coder` is hardcoded to UID/GID 1000 at image build time. There is no runtime adaptation. `run.sh` and `dev.sh` pass `--build-arg USER_UID=$(id -u)` so the locally-built image matches the host user. macOS Docker Desktop / Colima translate UIDs across the bind-mount boundary, which is why this is fine on the supported platform.
-- `.env` next to the launcher scripts is auto-sourced by both `run.sh` and `dev.sh` (`set -a; source .env; set +a`). It is git-ignored — use it for `ANTHROPIC_MODEL`, `DOCKER_SOCKET`, etc.
+- `.env` next to the launcher scripts is auto-sourced by both `run.sh` and `dev.sh` (`set -a; source .env; set +a`). It is git-ignored — use it for `ANTHROPIC_MODEL`, `DOCKER_SOCKET`, `AWS_SSO`/`AWS_DIR` (mount `~/.aws` to reuse host AWS SSO), `GH_AUTH` (inject host `gh auth token` as `GH_TOKEN`), etc.
 - The Dockerfile is organized into numbered "Layer N" comment blocks. Reordering them changes Docker's build cache invalidation behavior; keep slow/stable layers (apt, Go, Rust, Node) above fast-changing ones (Claude CLI install, hooks copy).
 - Auto-update is disabled inside the image (`DISABLE_AUTOUPDATER=1` env, `extensions.autoUpdate: false` for VS Code). To upgrade Claude Code, rebuild with a new `--claude-version`. Don't add update logic to the running container.
